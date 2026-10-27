@@ -1,24 +1,34 @@
-import { createApp } from "./app";
 import { config } from "./config";
+import { createRuntime } from "./server";
 
-const app = createApp();
+const runtime = createRuntime();
 
-const server = app.listen(config.port, () => {
+runtime.httpServer.listen(config.port, () => {
   console.log(`[tempass] server listening on http://localhost:${config.port}`);
 });
 
+let shuttingDown = false;
+
 function shutdown(signal: string) {
+  if (shuttingDown) {
+    return;
+  }
+
+  shuttingDown = true;
   console.log(`[tempass] received ${signal}, shutting down`);
 
-  server.close((error) => {
-    if (error) {
-      console.error("[tempass] shutdown failed:", error.message);
+  runtime
+    .close()
+    .then(() => {
+      process.exitCode = 0;
+    })
+    .catch((error: unknown) => {
+      console.error(
+        "[tempass] shutdown failed:",
+        error instanceof Error ? error.message : "Unknown error",
+      );
       process.exitCode = 1;
-      return;
-    }
-
-    process.exitCode = 0;
-  });
+    });
 }
 
 process.on("SIGINT", () => shutdown("SIGINT"));

@@ -1,10 +1,22 @@
 import type { ErrorRequestHandler } from "express";
 
+import { RoomError } from "../../domain/errors";
+
 export const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
-  const status = error instanceof SyntaxError ? 400 : 500;
-  const message = status === 400 ? "Malformed request body" : "Internal server error";
+  if (error instanceof RoomError) {
+    response.status(error.status).json({ code: error.code, message: error.message });
+    return;
+  }
 
-  console.error("[tempass] request failed:", error instanceof Error ? error.message : "Unknown error");
+  if (error instanceof SyntaxError) {
+    response.status(400).json({ code: "INVALID_INPUT", message: "Malformed request body" });
+    return;
+  }
 
-  response.status(status).json({ code: "REQUEST_FAILED", message });
+  console.error(
+    "[tempass] request failed:",
+    error instanceof Error ? error.message : "Unknown error",
+  );
+
+  response.status(500).json({ code: "INTERNAL", message: "Internal server error" });
 };

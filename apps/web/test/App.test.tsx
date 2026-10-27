@@ -1,9 +1,21 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "../src/App";
 
-afterEach(cleanup);
+beforeEach(() => {
+  window.history.replaceState({}, "", "/");
+  window.sessionStorage.clear();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => Promise.reject(new Error("Network disabled in this test"))),
+  );
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("App", () => {
   it("renders the Tempass landing page", () => {
@@ -14,13 +26,27 @@ describe("App", () => {
     expect(screen.getByText(/private watch-party app/i)).toBeTruthy();
   });
 
-  it("keeps room actions disabled in the skeleton", () => {
+  it("offers enabled room creation and join entry points", () => {
     render(<App />);
 
-    const createButton = screen.getByRole("button", { name: /create a room/i }) as HTMLButtonElement;
-    const joinButton = screen.getByRole("button", { name: /join a room/i }) as HTMLButtonElement;
+    const createHeading = screen.getByRole("heading", { name: /create a room/i });
+    expect(createHeading).toBeTruthy();
 
-    expect(createButton.disabled).toBe(true);
-    expect(joinButton.disabled).toBe(true);
+    const createButton = screen.getByRole("button", {
+      name: /create a room/i,
+    }) as HTMLButtonElement;
+    expect(createButton.disabled).toBe(false);
+
+    expect(screen.getByLabelText(/your display name/i)).toBeTruthy();
+    expect(screen.getByLabelText(/invitation link or room code/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /continue to room/i })).toBeTruthy();
+  });
+
+  it("shows the join screen for an invitation route without a session", async () => {
+    window.history.replaceState({}, "", "/join/AAAAAAAAAAAAAAAAAAAAAA");
+
+    render(<App />);
+
+    expect(await screen.findByText(/room unavailable/i)).toBeTruthy();
   });
 });
