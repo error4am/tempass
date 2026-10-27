@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 const ROOM_ID_BYTES = 16;
 const PARTICIPANT_ID_BYTES = 16;
+const MESSAGE_ID_BYTES = 16;
 const SESSION_TOKEN_BYTES = 32;
 
 export function createRoomId(): string {
@@ -10,6 +11,10 @@ export function createRoomId(): string {
 
 export function createParticipantId(): string {
   return randomBytes(PARTICIPANT_ID_BYTES).toString("base64url");
+}
+
+export function createMessageId(): string {
+  return randomBytes(MESSAGE_ID_BYTES).toString("base64url");
 }
 
 export function createSessionToken(): string {

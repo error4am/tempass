@@ -13,6 +13,9 @@ export interface TempassRuntimeOptions {
   emptyRoomTtlMs?: number;
   roomMaxAgeMs?: number;
   cleanupIntervalMs?: number;
+  chatHistoryLimit?: number;
+  chatRateLimitWindowMs?: number;
+  chatRateLimitMaxMessages?: number;
   corsOrigin?: string;
   webOrigin?: string;
   now?: RoomServiceOptions["now"];
@@ -37,12 +40,17 @@ export function createRuntime(options: TempassRuntimeOptions = {}): TempassRunti
     reconnectGraceMs: options.reconnectGraceMs ?? config.reconnectGraceMs,
     emptyRoomTtlMs: options.emptyRoomTtlMs ?? config.emptyRoomTtlMs,
     roomMaxAgeMs: options.roomMaxAgeMs ?? config.roomMaxAgeMs,
+    chatHistoryLimit: options.chatHistoryLimit,
     ...(options.now ? { now: options.now } : {}),
   });
 
   const app = createApp({ roomService, webOrigin, corsOrigin });
   const httpServer = createHttpServer(app);
-  const io = attachRealtime(httpServer, roomService, { corsOrigin });
+  const io = attachRealtime(httpServer, roomService, {
+    corsOrigin,
+    chatRateLimitWindowMs: options.chatRateLimitWindowMs,
+    chatRateLimitMaxMessages: options.chatRateLimitMaxMessages,
+  });
 
   const sweep = () => {
     const changedRoomIds = roomService.sweep();

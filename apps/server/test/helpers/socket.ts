@@ -1,4 +1,6 @@
 import type {
+  ChatMessage,
+  ChatSendAck,
   ClientToServerEvents,
   PresenceUpdate,
   RoomSnapshot,
@@ -73,6 +75,43 @@ export function waitForPresence(
     };
 
     socket.on("presence:update", onPresence);
+  });
+}
+
+export function waitForChatMessage(
+  socket: TestSocket,
+  predicate: (message: ChatMessage) => boolean = () => true,
+): Promise<ChatMessage> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.off("chat:message", onMessage);
+      reject(new Error("Timed out waiting for a matching chat:message"));
+    }, DEFAULT_TIMEOUT_MS);
+
+    const onMessage = (message: ChatMessage) => {
+      if (!predicate(message)) {
+        return;
+      }
+
+      clearTimeout(timer);
+      socket.off("chat:message", onMessage);
+      resolve(message);
+    };
+
+    socket.on("chat:message", onMessage);
+  });
+}
+
+export function sendChatMessage(socket: TestSocket, payload: unknown): Promise<ChatSendAck> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Timed out waiting for chat send acknowledgement"));
+    }, DEFAULT_TIMEOUT_MS);
+
+    socket.emit("chat:message", payload, (ack) => {
+      clearTimeout(timer);
+      resolve(ack);
+    });
   });
 }
 

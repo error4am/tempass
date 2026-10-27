@@ -95,8 +95,8 @@ export function Home() {
 
         <p className="mt-5 max-w-xl text-base leading-7 text-slate-400">
           Tempass is a private watch-party app for two people. Create a room, share the invitation
-          link, and meet the other participant there. Synchronized YouTube playback and chat are
-          arriving in the next milestones.
+          link, and chat with the other participant while synchronized YouTube playback arrives in
+          a later milestone.
         </p>
       </div>
 

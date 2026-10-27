@@ -1,14 +1,17 @@
-import type {
-  CreateRoomRequest,
-  JoinRoomRequest,
-  PresenceUpdate,
-  PublicParticipant,
-  PublicRoom,
-  RoomSnapshot,
+import {
+  CHAT_HISTORY_LIMIT,
+  type ChatMessage,
+  type CreateRoomRequest,
+  type JoinRoomRequest,
+  type PresenceUpdate,
+  type PublicParticipant,
+  type PublicRoom,
+  type RoomSnapshot,
 } from "@tempass/shared";
 
 import { hashPassword, verifyPassword } from "../security/password";
 import {
+  createMessageId,
   createParticipantId,
   createRoomId,
   createSessionToken,
@@ -30,6 +33,7 @@ const DEFAULTS = {
   reconnectGraceMs: 30_000,
   emptyRoomTtlMs: 300_000,
   roomMaxAgeMs: 43_200_000,
+  chatHistoryLimit: CHAT_HISTORY_LIMIT,
 };
 
 export class RoomService {
@@ -37,6 +41,7 @@ export class RoomService {
   private readonly reconnectGraceMs: number;
   private readonly emptyRoomTtlMs: number;
   private readonly roomMaxAgeMs: number;
+  private readonly chatHistoryLimit: number;
   private readonly now: () => number;
   private readonly sessions = new Map<string, StoredSession>();
 
@@ -48,6 +53,7 @@ export class RoomService {
     this.reconnectGraceMs = options.reconnectGraceMs ?? DEFAULTS.reconnectGraceMs;
     this.emptyRoomTtlMs = options.emptyRoomTtlMs ?? DEFAULTS.emptyRoomTtlMs;
     this.roomMaxAgeMs = options.roomMaxAgeMs ?? DEFAULTS.roomMaxAgeMs;
+    this.chatHistoryLimit = options.chatHistoryLimit ?? DEFAULTS.chatHistoryLimit;
     this.now = options.now ?? (() => Date.now());
   }
 
@@ -62,6 +68,7 @@ export class RoomService {
       passwordHash,
       capacity: this.capacity,
       participants: new Map([[participant.id, participant]]),
+      messages: [],
       emptySince: null,
     };
 
@@ -138,8 +145,48 @@ export class RoomService {
       room: this.toPublicRoom(room),
       self: this.toPublicParticipant(participant),
       participants: this.listParticipants(room),
+      messages: [...room.messages],
       serverTime: this.now(),
     };
+  }
+
+  getChatHistory(roomId: string): ChatMessage[] | null {
+    const room = this.getActiveRoom(roomId);
+    return room ? [...room.messages] : null;
+  }
+
+  isCurrentSocket(roomId: string, participantId: string, socketId: string): boolean {
+    return this.getCurrentParticipant(roomId, participantId, socketId) !== null;
+  }
+
+  postChatMessage(
+    roomId: string,
+    participantId: string,
+    socketId: string,
+    text: string,
+  ): ChatMessage | null {
+    const current = this.getCurrentParticipant(roomId, participantId, socketId);
+
+    if (!current) {
+      return null;
+    }
+
+    const { room, participant } = current;
+    const message: ChatMessage = {
+      id: createMessageId(),
+      senderId: participant.id,
+      senderName: participant.displayName,
+      text,
+      sentAt: new Date(this.now()).toISOString(),
+    };
+
+    room.messages.push(message);
+
+    if (room.messages.length > this.chatHistoryLimit) {
+      room.messages.splice(0, room.messages.length - this.chatHistoryLimit);
+    }
+
+    return message;
   }
 
   getPresence(roomId: string): PresenceUpdate | null {
@@ -276,6 +323,26 @@ export class RoomService {
     }
 
     return [...changedRoomIds];
+  }
+
+  private getCurrentParticipant(
+    roomId: string,
+    participantId: string,
+    socketId: string,
+  ): { room: StoredRoom; participant: StoredParticipant } | null {
+    const room = this.getActiveRoom(roomId);
+    const participant = room?.participants.get(participantId);
+
+    if (
+      !room ||
+      !participant ||
+      !participant.connected ||
+      participant.socketId !== socketId
+    ) {
+      return null;
+    }
+
+    return { room, participant };
   }
 
   private createParticipant(

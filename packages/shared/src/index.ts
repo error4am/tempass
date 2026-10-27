@@ -6,6 +6,8 @@ export const MAX_DISPLAY_NAME_LENGTH = 24;
 export const MIN_PASSWORD_LENGTH = 4;
 export const MAX_PASSWORD_LENGTH = 64;
 export const ROOM_ID_LENGTH = 22;
+export const MAX_CHAT_MESSAGE_LENGTH = 500;
+export const CHAT_HISTORY_LIMIT = 100;
 
 export const healthResponseSchema = z.object({
   status: z.literal("ok"),
@@ -78,10 +80,60 @@ export const roomAccessResponseSchema = z.object({
 
 export type RoomAccessResponse = z.infer<typeof roomAccessResponseSchema>;
 
+export const chatMessageTextSchema = z
+  .string()
+  .trim()
+  .min(1, "Message cannot be empty")
+  .max(MAX_CHAT_MESSAGE_LENGTH, `Message must be at most ${MAX_CHAT_MESSAGE_LENGTH} characters`)
+  .refine((value) => !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value), {
+    message: "Message contains invalid characters",
+  });
+
+export const chatMessageSchema = z.object({
+  id: z.string().min(1),
+  senderId: z.string().min(1),
+  senderName: displayNameSchema,
+  text: chatMessageTextSchema,
+  sentAt: z.iso.datetime(),
+});
+
+export type ChatMessage = z.infer<typeof chatMessageSchema>;
+
+export const sendChatMessagePayloadSchema = z
+  .object({
+    text: chatMessageTextSchema,
+  })
+  .strict();
+
+export type SendChatMessagePayload = z.infer<typeof sendChatMessagePayloadSchema>;
+
+export const chatErrorCodes = [
+  "INVALID_INPUT",
+  "UNAUTHORIZED",
+  "RATE_LIMITED",
+  "INTERNAL",
+] as const;
+
+export type ChatErrorCode = (typeof chatErrorCodes)[number];
+
+export const chatSendAckSchema = z.discriminatedUnion("ok", [
+  z.object({
+    ok: z.literal(true),
+    message: chatMessageSchema,
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: z.enum(chatErrorCodes),
+  }),
+]);
+
+export type ChatSendAck = z.infer<typeof chatSendAckSchema>;
+
 export const roomSnapshotSchema = z.object({
   room: publicRoomSchema,
   self: publicParticipantSchema,
   participants: z.array(publicParticipantSchema),
+  messages: z.array(chatMessageSchema),
   serverTime: z.number().int().nonnegative(),
 });
 
@@ -133,15 +185,18 @@ export const SOCKET_EVENTS = {
   ROOM_SNAPSHOT: "room:snapshot",
   PRESENCE_UPDATE: "presence:update",
   ROOM_LEAVE: "room:leave",
+  CHAT_MESSAGE: "chat:message",
 } as const;
 
 export interface ClientToServerEvents {
   "room:leave": (payload: unknown, ack?: (response: LeaveRoomAck) => void) => void;
+  "chat:message": (payload: unknown, ack?: (response: ChatSendAck) => void) => void;
 }
 
 export interface ServerToClientEvents {
   "room:snapshot": (snapshot: RoomSnapshot) => void;
   "presence:update": (update: PresenceUpdate) => void;
+  "chat:message": (message: ChatMessage) => void;
 }
 
 export function roomInvitePath(roomId: string): string {

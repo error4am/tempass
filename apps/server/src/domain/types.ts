@@ -1,3 +1,5 @@
+import type { ChatMessage } from "@tempass/shared";
+
 export interface StoredParticipant {
   id: string;
   displayName: string;
@@ -14,6 +16,7 @@ export interface StoredRoom {
   passwordHash: string | null;
   capacity: number;
   participants: Map<string, StoredParticipant>;
+  messages: ChatMessage[];
   emptySince: number | null;
 }
 
@@ -27,6 +30,7 @@ export interface RoomServiceOptions {
   reconnectGraceMs: number;
   emptyRoomTtlMs: number;
   roomMaxAgeMs: number;
+  chatHistoryLimit: number;
   now: () => number;
 }
 

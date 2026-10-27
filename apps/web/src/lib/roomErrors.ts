@@ -8,6 +8,17 @@ const ROOM_ERROR_MESSAGES: Record<string, string> = {
   INTERNAL: "Something went wrong. Please try again.",
 };
 
+const CHAT_ERROR_MESSAGES: Record<string, string> = {
+  INVALID_INPUT: "That message could not be sent. Check it and try again.",
+  UNAUTHORIZED: "Your room session expired. Join the room again to chat.",
+  RATE_LIMITED: "You are sending messages too quickly. Wait a moment and try again.",
+  INTERNAL: "Could not send the message. Please try again.",
+};
+
 export function roomErrorMessage(code: string, fallback?: string): string {
   return ROOM_ERROR_MESSAGES[code] ?? fallback ?? ROOM_ERROR_MESSAGES.INTERNAL ?? "Something went wrong.";
+}
+
+export function chatErrorMessage(code: string): string {
+  return CHAT_ERROR_MESSAGES[code] ?? CHAT_ERROR_MESSAGES.INTERNAL ?? "Could not send the message.";
 }

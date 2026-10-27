@@ -3,8 +3,8 @@
 Tempass is a private, YouTube-only watch-party web application for two people. One creates a
 room, shares an invitation link, and both participants meet in the same room.
 
-The current stage implements **rooms, optional passwords, sessions, and live participant
-presence**. Chat, video selection, and synchronized playback are not implemented yet, and both
+The current stage implements **rooms, optional passwords, sessions, live participant presence,
+and real-time chat**. Video selection and synchronized playback are not implemented yet, and both
 participants will eventually have equal playback controls.
 
 ## Requirements
@@ -33,8 +33,10 @@ the API server, so the browser uses a single origin during development.
 2. Enter a display name, optionally set a password, and create the room.
 3. Use **Copy invite link** and open that link in a second window or a private/incognito window.
 4. Enter a second display name (and the password, if set) to join.
-5. Both windows should show both participants as online. Closing or reloading one window marks
-   that participant as reconnecting for up to 30 seconds; **Leave room** removes them.
+5. Both windows should show both participants as online. Send a chat message from either window
+   and confirm it appears in both, sender name included.
+6. Closing or reloading one window marks that participant as reconnecting for up to 30 seconds;
+   **Leave room** removes them.
 
 Invitation links point at the configured `WEB_ORIGIN`, which defaults to `localhost`. They work on
 this machine only until the app is deployed behind a shared origin.
@@ -56,8 +58,8 @@ this machine only until the app is deployed behind a shared origin.
 
 ```text
 apps/
-  server/   Express + Socket.IO API (rooms, sessions, presence, cleanup)
-  web/      React + Vite + Tailwind client (create, join, and room screens)
+  server/   Express + Socket.IO API (rooms, sessions, presence, chat, cleanup)
+  web/      React + Vite + Tailwind client (create, join, room, and chat UI)
 packages/
   shared/   Zod contracts, socket event types, and shared constants
 ```
@@ -115,21 +117,46 @@ participant IDs are random server-generated identifiers; clients cannot choose o
 - The server sweeps expired sessions, empty rooms, and rooms older than 12 hours. Deleted rooms
   disconnect any remaining sockets.
 
+### Chat
+
+- Clients emit `chat:message` with `{ text }` and receive an acknowledgement:
+  `{ ok: true, message }` or `{ ok: false, code }`.
+- The server derives the room, participant ID, display name, message ID, and timestamp from
+  authenticated socket state. Client-supplied sender, room, or timestamp fields are rejected by the
+  strict payload schema.
+- Message text is trimmed, must contain 1–500 characters, and rejects binary control characters.
+  Newlines and tabs are allowed. Rejected messages are acknowledged and never broadcast.
+- Accepted messages are broadcast only with `io.to(roomId)`, so they never leave the room. The
+  sender receives the same canonical message object as the other participant.
+- Each room keeps its most recent 100 messages in memory. History is included in the
+  `room:snapshot` sent after joining or reconnecting. Histories are per-room and are discarded with
+  the room.
+- A lightweight per-socket limit allows 10 accepted messages per 10 seconds. Rejected sends return
+  `RATE_LIMITED`. Malformed sends do not consume the allowance.
+- The web client prevents repeated submits while a send is pending, trims the draft, and only clears
+  it after the server accepts the message. Shift+Enter inserts a newline; Enter sends.
+
 ## Security notes
 
 - API request bodies and socket payloads are validated with strict Zod schemas.
 - Display names are trimmed, limited to 24 characters, and reject control characters.
+- Chat messages are stored and rendered as plain text only. The UI does not parse HTML or markdown.
 - Passwords are 4–64 characters and compared with scrypt.
-- Passwords, session tokens, and internal password hashes are never logged.
-- Join rate limiting is not implemented yet; do not expose this development server directly to the
-  public internet.
+- Passwords, session tokens, chat contents, and internal password hashes are never logged.
+- Join rate limiting is not implemented yet, and per-socket chat limits are only a basic abuse
+  control. Do not expose this development server directly to the public internet.
 
 ## Scope and limitations
 
 - YouTube only. Video selection and the official IFrame Player API integration come later.
 - Videos that disallow embedding, require sign-in, or are region-restricted cannot be watched.
 - Tempass must not bypass DRM, advertisements, authentication, or access restrictions.
-- Room state is in memory on a single server. Restarting the server erases rooms and sessions.
-- Chat, a video queue, playback synchronization, and reconnection resync of playback are not
-  implemented yet.
+- Room state and chat history are in memory on a single server. Restarting the server erases rooms,
+  sessions, and all messages.
+- Chat has no attachments, images, reactions, read receipts, typing indicators, private messages,
+  editing, or deletion.
+- There is no server-side idempotency key or duplicate-message merge; the client prevents repeated
+  submits while a send is pending. Message IDs are unique per accepted message.
+- A video queue, playback synchronization, and reconnection resync of playback are not implemented
+  yet.
 - Both participants will eventually have equal playback controls. No host-only model.
