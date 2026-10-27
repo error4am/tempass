@@ -296,6 +296,15 @@ export function YouTubePlayer({
         return;
       }
 
+      // If the player is already playing (e.g. from native controls or the custom
+      // play button) and the canonical state changed to paused mid-playback, do not
+      // spuriously attempt to pause. The applyCanonicalPlayback effect is
+      // responsible for triggering pause; a mid-state player that is playing must
+      // not be re-interfered with by the drift check.
+      if (state.status === "paused" && playerState === PLAYER_STATE_PLAYING) {
+        return;
+      }
+
       const expectedPosition = expectedPositionFor(update);
       const actualPosition = readPlayerPosition(player);
       const drift = calculatePlaybackDrift(expectedPosition, actualPosition);
