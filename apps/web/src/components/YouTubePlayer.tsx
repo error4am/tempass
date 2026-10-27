@@ -274,6 +274,20 @@ export function YouTubePlayer({
 
       const playerState = readPlayerState(player);
 
+      // Defensive guard: if the player is not yet playing and we're being
+      // called with ensureTransport (e.g. from handlePlayerStateChange), do not
+      // spuriously attempt to play or pause. The applyCanonicalPlayback
+      // effect is responsible for triggering play; a mid-state player that is
+      // buffering or cued must not be re-interfered with by the drift check.
+      if (ensureTransport && playerState !== PLAYER_STATE_PLAYING) {
+        if (playerState === PLAYER_STATE_CUED) {
+          return;
+        }
+        if (playerState === PLAYER_STATE_PAUSED) {
+          return;
+        }
+      }
+
       if (
         playerState === PLAYER_STATE_BUFFERING ||
         playerState === PLAYER_STATE_ENDED ||
