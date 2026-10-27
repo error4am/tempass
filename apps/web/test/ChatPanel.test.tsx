@@ -72,12 +72,13 @@ describe("ChatPanel", () => {
     expect(container.querySelector("script")).toBeNull();
   });
 
-  it("sends trimmed text on Enter and clears the draft after acceptance", async () => {
+  it("sends trimmed text on Enter, clears the draft, and restores focus", async () => {
     const onSend = vi.fn().mockResolvedValue(ACCEPTED);
 
     render(<ChatPanel messages={[]} selfId="participant-alex" connected onSend={onSend} />);
 
     const input = screen.getByLabelText("Message") as HTMLTextAreaElement;
+    input.focus();
     fireEvent.change(input, { target: { value: "  Hello Sam  " } });
     fireEvent.keyDown(input, { key: "Enter" });
 
@@ -87,6 +88,65 @@ describe("ChatPanel", () => {
     await waitFor(() => {
       expect(input.value).toBe("");
     });
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("returns focus to the composer after a successful Send button click", async () => {
+    const onSend = vi.fn().mockResolvedValue(ACCEPTED);
+
+    render(<ChatPanel messages={[]} selfId="participant-alex" connected onSend={onSend} />);
+
+    const input = screen.getByLabelText("Message") as HTMLTextAreaElement;
+    const sendButton = screen.getByRole("button", { name: "Send" });
+
+    input.focus();
+    fireEvent.change(input, { target: { value: "Sent with the button" } });
+    sendButton.focus();
+    fireEvent.click(sendButton);
+
+    await waitFor(() => {
+      expect(onSend).toHaveBeenCalledWith("Sent with the button");
+    });
+    await waitFor(() => {
+      expect(input.value).toBe("");
+    });
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("does not take focus from another control when a send completes later", async () => {
+    let resolveSend: (ack: ChatSendAck) => void = () => undefined;
+    const onSend = vi.fn(
+      () =>
+        new Promise<ChatSendAck>((resolve) => {
+          resolveSend = resolve;
+        }),
+    );
+
+    render(
+      <>
+        <ChatPanel messages={[]} selfId="participant-alex" connected onSend={onSend} />
+        <button type="button">Other control</button>
+      </>,
+    );
+
+    const input = screen.getByLabelText("Message") as HTMLTextAreaElement;
+    const otherControl = screen.getByRole("button", { name: "Other control" });
+
+    input.focus();
+    fireEvent.change(input, { target: { value: "Slow message" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(onSend).toHaveBeenCalledWith("Slow message");
+    });
+
+    otherControl.focus();
+    resolveSend(ACCEPTED);
+
+    await waitFor(() => {
+      expect(input.value).toBe("");
+    });
+    expect(document.activeElement).toBe(otherControl);
   });
 
   it("keeps the draft and shows an error when the server rejects a message", async () => {

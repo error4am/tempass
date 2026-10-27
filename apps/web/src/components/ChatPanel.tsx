@@ -34,6 +34,9 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const restoreFocus = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
 
@@ -48,6 +51,22 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
       container.scrollTop = container.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (sending || !restoreFocus.current) {
+      return;
+    }
+
+    restoreFocus.current = false;
+
+    const activeElement = document.activeElement;
+    const focusRemainsInComposer =
+      activeElement === document.body || formRef.current?.contains(activeElement) === true;
+
+    if (focusRemainsInComposer && activeElement !== inputRef.current) {
+      inputRef.current?.focus({ preventScroll: true });
+    }
+  }, [sending]);
 
   function handleScroll() {
     const container = scrollRef.current;
@@ -77,6 +96,7 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
       return;
     }
 
+    restoreFocus.current = false;
     setSending(true);
     setError(null);
 
@@ -84,6 +104,7 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
       const ack = await onSend(text);
 
       if (ack.ok) {
+        restoreFocus.current = true;
         setDraft("");
       } else {
         setError(chatErrorMessage(ack.code));
@@ -181,11 +202,12 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
         )}
       </div>
 
-      <form className="mt-3 min-w-0 shrink-0 space-y-2" onSubmit={handleSubmit}>
+      <form ref={formRef} className="mt-3 min-w-0 shrink-0 space-y-2" onSubmit={handleSubmit}>
         <label htmlFor="chat-input" className="sr-only">
           Message
         </label>
         <textarea
+          ref={inputRef}
           id="chat-input"
           value={draft}
           onChange={(event) => {
