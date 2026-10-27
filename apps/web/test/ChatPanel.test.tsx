@@ -134,4 +134,58 @@ describe("ChatPanel", () => {
     );
     expect(screen.getByText(/chat is paused/i)).toBeTruthy();
   });
+
+  it("preserves the reading position when scrolled up and resumes following at the bottom", () => {
+    const newMessage: ChatMessage = {
+      id: "message-3",
+      senderId: "participant-sam",
+      senderName: "Sam",
+      text: "A new message",
+      sentAt: "2026-01-02T03:06:00.000Z",
+    };
+    const newestMessage: ChatMessage = {
+      ...newMessage,
+      id: "message-4",
+      text: "The newest message",
+    };
+
+    const { rerender } = render(
+      <ChatPanel messages={MESSAGES} selfId="participant-alex" connected onSend={vi.fn()} />,
+    );
+    const log = screen.getByRole("log");
+
+    Object.defineProperties(log, {
+      scrollHeight: { configurable: true, value: 600 },
+      clientHeight: { configurable: true, value: 200 },
+    });
+
+    log.scrollTop = 0;
+    fireEvent.scroll(log);
+
+    rerender(
+      <ChatPanel
+        messages={[...MESSAGES, newMessage]}
+        selfId="participant-alex"
+        connected
+        onSend={vi.fn()}
+      />,
+    );
+
+    expect(log.scrollTop).toBe(0);
+
+    log.scrollTop = 400;
+    fireEvent.scroll(log);
+    Object.defineProperty(log, "scrollHeight", { configurable: true, value: 700 });
+
+    rerender(
+      <ChatPanel
+        messages={[...MESSAGES, newMessage, newestMessage]}
+        selfId="participant-alex"
+        connected
+        onSend={vi.fn()}
+      />,
+    );
+
+    expect(log.scrollTop).toBe(700);
+  });
 });

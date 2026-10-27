@@ -265,127 +265,125 @@ export function Room({ roomId, session }: RoomProps) {
           </section>
         ) : null}
 
-        <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
-          <div className="flex min-w-0 flex-col gap-4">
-            <section
-              aria-labelledby="room-stage-heading"
-              className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"
-            >
-              <h2 id="room-stage-heading" className="text-sm font-semibold text-slate-200">
-                Watch together
-              </h2>
-              <p className="mt-1 text-sm text-slate-400">
-                The YouTube player arrives in a later milestone.
-              </p>
+        <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
+          <section
+            aria-labelledby="room-stage-heading"
+            className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+          >
+            <h2 id="room-stage-heading" className="text-sm font-semibold text-slate-200">
+              Watch together
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              The YouTube player arrives in a later milestone.
+            </p>
 
-              <div className="mt-4 flex aspect-video items-center justify-center rounded-xl border border-dashed border-white/10 bg-slate-900/50 px-6 text-center">
-                <div>
-                  <p className="text-sm font-medium text-slate-300">Shared playback is next</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Room creation, invitation, presence, and chat are working now.
-                  </p>
-                </div>
+            <div className="mt-4 flex aspect-video items-center justify-center rounded-xl border border-dashed border-white/10 bg-slate-900/50 px-6 text-center">
+              <div>
+                <p className="text-sm font-medium text-slate-300">Shared playback is next</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Room creation, invitation, presence, and chat are working now.
+                </p>
               </div>
-            </section>
+            </div>
+          </section>
 
-            <ChatPanel
-              messages={messages}
-              selfId={session.participantId}
-              connected={status === "connected"}
-              onSend={sendChatMessage}
+          <ChatPanel
+            messages={messages}
+            selfId={session.participantId}
+            connected={status === "connected"}
+            onSend={sendChatMessage}
+          />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <section
+            aria-labelledby="participants-heading"
+            className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+          >
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 id="participants-heading" className="text-sm font-semibold text-slate-200">
+                Participants
+              </h2>
+              <span className="text-xs text-slate-500">
+                {participants.length}/{capacity}
+              </span>
+            </div>
+
+            <ul className="mt-3 space-y-2">
+              {participants.map((participant) => {
+                const isSelf = participant.id === session.participantId;
+
+                return (
+                  <li
+                    key={participant.id}
+                    className="flex items-center gap-3 rounded-xl border border-white/5 bg-slate-900/40 px-3 py-2"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-500/20 text-xs font-semibold uppercase text-rose-200">
+                      {participant.displayName.slice(0, 1)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-slate-200">
+                        {participant.displayName}
+                        {isSelf ? <span className="ml-1 text-xs text-slate-500">(you)</span> : null}
+                      </span>
+                      <span className="block text-xs text-slate-500">
+                        {participant.connected ? "Connected" : "Reconnecting…"}
+                      </span>
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className={`h-2 w-2 rounded-full ${
+                        participant.connected ? "bg-emerald-400" : "bg-amber-300"
+                      }`}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+
+            {participants.length === 1 ? (
+              <p className="mt-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-xs text-slate-500">
+                Waiting for the second person to join…
+              </p>
+            ) : null}
+          </section>
+
+          <section
+            aria-labelledby="invite-heading"
+            className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+          >
+            <h2 id="invite-heading" className="text-sm font-semibold text-slate-200">
+              Invitation link
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Share it with the other participant.
+            </p>
+
+            <label htmlFor="invite-link" className="sr-only">
+              Invitation link
+            </label>
+            <input
+              id="invite-link"
+              readOnly
+              value={inviteUrl}
+              onFocus={(event) => event.currentTarget.select()}
+              className="mt-3 h-10 w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/70 px-3 font-mono text-xs text-slate-300"
             />
-          </div>
 
-          <div className="flex flex-col gap-4">
-            <section
-              aria-labelledby="participants-heading"
-              className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="mt-3 h-9 w-full rounded-lg bg-rose-500 px-3 text-xs font-semibold text-white transition hover:bg-rose-400"
             >
-              <div className="flex items-baseline justify-between gap-3">
-                <h2 id="participants-heading" className="text-sm font-semibold text-slate-200">
-                  Participants
-                </h2>
-                <span className="text-xs text-slate-500">
-                  {participants.length}/{capacity}
-                </span>
-              </div>
+              {copied ? "Copied" : "Copy invitation link"}
+            </button>
 
-              <ul className="mt-3 space-y-2">
-                {participants.map((participant) => {
-                  const isSelf = participant.id === session.participantId;
-
-                  return (
-                    <li
-                      key={participant.id}
-                      className="flex items-center gap-3 rounded-xl border border-white/5 bg-slate-900/40 px-3 py-2"
-                    >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-500/20 text-xs font-semibold uppercase text-rose-200">
-                        {participant.displayName.slice(0, 1)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm text-slate-200">
-                          {participant.displayName}
-                          {isSelf ? <span className="ml-1 text-xs text-slate-500">(you)</span> : null}
-                        </span>
-                        <span className="block text-xs text-slate-500">
-                          {participant.connected ? "Connected" : "Reconnecting…"}
-                        </span>
-                      </span>
-                      <span
-                        aria-hidden="true"
-                        className={`h-2 w-2 rounded-full ${
-                          participant.connected ? "bg-emerald-400" : "bg-amber-300"
-                        }`}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {participants.length === 1 ? (
-                <p className="mt-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-xs text-slate-500">
-                  Waiting for the second person to join…
-                </p>
-              ) : null}
-            </section>
-
-            <section
-              aria-labelledby="invite-heading"
-              className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"
-            >
-              <h2 id="invite-heading" className="text-sm font-semibold text-slate-200">
-                Invitation link
-              </h2>
-              <p className="mt-1 text-xs text-slate-500">
-                Share it with the other participant.
+            {copyError ? (
+              <p role="alert" className="mt-2 text-xs text-rose-300">
+                {copyError}
               </p>
-
-              <label htmlFor="invite-link" className="sr-only">
-                Invitation link
-              </label>
-              <input
-                id="invite-link"
-                readOnly
-                value={inviteUrl}
-                onFocus={(event) => event.currentTarget.select()}
-                className="mt-3 h-10 w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 font-mono text-xs text-slate-300"
-              />
-
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="mt-3 h-9 w-full rounded-lg bg-rose-500 px-3 text-xs font-semibold text-white transition hover:bg-rose-400"
-              >
-                {copied ? "Copied" : "Copy invitation link"}
-              </button>
-
-              {copyError ? (
-                <p role="alert" className="mt-2 text-xs text-rose-300">
-                  {copyError}
-                </p>
-              ) : null}
-            </section>
-          </div>
+            ) : null}
+          </section>
         </div>
       </div>
     </Shell>

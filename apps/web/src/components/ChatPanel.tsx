@@ -112,19 +112,19 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
   return (
     <section
       aria-labelledby="chat-heading"
-      className="flex min-h-[380px] flex-1 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+      className="flex h-[min(32rem,70dvh)] min-h-0 min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:h-[28rem]"
     >
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="flex min-w-0 shrink-0 items-baseline justify-between gap-3">
         <h2 id="chat-heading" className="text-sm font-semibold text-slate-200">
           Chat
         </h2>
-        <span className="text-xs text-slate-500">Recent messages only</span>
+        <span className="shrink-0 text-xs text-slate-500">Recent messages only</span>
       </div>
 
       {!connected ? (
         <p
           role="status"
-          className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100"
+          className="mt-3 shrink-0 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100"
         >
           Chat is paused until the room connection is ready.
         </p>
@@ -136,28 +136,28 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
         role="log"
         aria-live="polite"
         aria-label="Chat messages"
-        className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-xl border border-white/5 bg-slate-950/40 p-3"
+        className="mt-3 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-xl border border-white/5 bg-slate-950/40 p-3"
       >
         {messages.length === 0 ? (
           <p className="px-1 py-6 text-center text-sm text-slate-500">
             No messages yet. Say hello.
           </p>
         ) : (
-          <ol className="space-y-3">
+          <ol className="min-w-0 space-y-3">
             {messages.map((message) => {
               const isSelf = message.senderId === selfId;
 
               return (
                 <li
                   key={message.id}
-                  className={`rounded-xl border px-3 py-2 ${
+                  className={`min-w-0 rounded-xl border px-3 py-2 ${
                     isSelf
                       ? "border-rose-400/15 bg-rose-400/[0.06]"
                       : "border-white/5 bg-white/[0.03]"
                   }`}
                 >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="truncate text-xs font-semibold text-slate-200">
+                  <div className="flex min-w-0 items-baseline justify-between gap-3">
+                    <span className="min-w-0 truncate text-xs font-semibold text-slate-200">
                       {message.senderName}
                       {isSelf ? (
                         <span className="ml-1 font-normal text-slate-500">(you)</span>
@@ -171,7 +171,7 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
                       {formatTimestamp(message.sentAt)}
                     </time>
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">
+                  <p className="mt-1 min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-6 text-slate-300">
                     {message.text}
                   </p>
                 </li>
@@ -181,7 +181,7 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
         )}
       </div>
 
-      <form className="mt-3 space-y-2" onSubmit={handleSubmit}>
+      <form className="mt-3 min-w-0 shrink-0 space-y-2" onSubmit={handleSubmit}>
         <label htmlFor="chat-input" className="sr-only">
           Message
         </label>
@@ -197,11 +197,11 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
           maxLength={MAX_CHAT_MESSAGE_LENGTH}
           placeholder={connected ? "Write a message…" : "Reconnect to send messages"}
           disabled={!connected || sending}
-          className="w-full resize-none rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-rose-400/60 focus:outline-none focus:ring-2 focus:ring-rose-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+          className="block w-full min-w-0 resize-none rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-rose-400/60 focus:outline-none focus:ring-2 focus:ring-rose-400/20 disabled:cursor-not-allowed disabled:opacity-60"
         />
 
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-[11px] text-slate-500">
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <span className="min-w-0 truncate text-[11px] text-slate-500">
             {draft.length}/{MAX_CHAT_MESSAGE_LENGTH} · Enter sends, Shift+Enter adds a line
           </span>
           <button
@@ -214,7 +214,7 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
         </div>
 
         {error ? (
-          <p role="alert" className="text-xs text-rose-300">
+          <p role="alert" className="min-w-0 text-xs text-rose-300">
             {error}
           </p>
         ) : null}
