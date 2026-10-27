@@ -4,9 +4,10 @@ import { navigate } from "../lib/router";
 
 interface ShellProps {
   children: ReactNode;
+  wide?: boolean;
 }
 
-export function Shell({ children }: ShellProps) {
+export function Shell({ children, wide = false }: ShellProps) {
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <div
@@ -14,7 +15,11 @@ export function Shell({ children }: ShellProps) {
         className="pointer-events-none absolute -top-40 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-rose-500/15 blur-3xl"
       />
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-8 sm:px-8">
+      <div
+        className={`relative mx-auto flex min-h-screen w-full flex-col px-5 py-8 sm:px-8 ${
+          wide ? "max-w-7xl" : "max-w-5xl"
+        }`}
+      >
         <header className="flex items-center justify-between gap-4">
           <button
             type="button"

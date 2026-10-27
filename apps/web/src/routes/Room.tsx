@@ -190,7 +190,7 @@ export function Room({ roomId, session }: RoomProps) {
   const statusLabel = STATUS_LABELS[status];
 
   return (
-    <Shell>
+    <Shell wide>
       <div className="flex flex-1 flex-col gap-4">
         <section className="flex flex-col justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:flex-row sm:items-center">
           <div>
@@ -265,7 +265,7 @@ export function Room({ roomId, session }: RoomProps) {
           </section>
         ) : null}
 
-        <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
+        <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)]">
           <section
             aria-labelledby="room-stage-heading"
             className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-5"
