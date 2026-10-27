@@ -6,6 +6,7 @@ dist/
 dist-ssr/
 coverage/
 .vite/
+.vercel/
 *.tsbuildinfo
 
 # Environment files

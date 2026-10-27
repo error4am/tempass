@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "apps/web/dist",
+  "rewrites": [
+    {
+      "source": "/join/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/room/:path*",
+      "destination": "/index.html"
+    }
+  ]
+}

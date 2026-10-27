@@ -16,7 +16,7 @@ export default defineConfig({
     environment: "jsdom",
     include: [
       "apps/server/test/**/*.test.ts",
-      "apps/web/test/**/*.test.tsx",
+      "apps/web/test/**/*.test.{ts,tsx}",
       "packages/shared/test/**/*.test.ts",
     ],
   },

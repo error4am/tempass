@@ -3,8 +3,8 @@ import { createRuntime } from "./server";
 
 const runtime = createRuntime();
 
-runtime.httpServer.listen(config.port, () => {
-  console.log(`[tempass] server listening on http://localhost:${config.port}`);
+runtime.httpServer.listen(config.port, config.host, () => {
+  console.log(`[tempass] server listening on http://${config.host}:${config.port}`);
 });
 
 let shuttingDown = false;

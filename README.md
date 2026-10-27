@@ -4,8 +4,9 @@ Tempass is a private, YouTube-only watch-party web application for two people. O
 room, shares an invitation link, and both participants meet in the same room.
 
 The current stage implements **rooms, optional passwords, sessions, live participant presence,
-and real-time chat**. Video selection and synchronized playback are not implemented yet, and both
-participants will eventually have equal playback controls.
+real-time chat, and a single-instance test deployment configuration**. Video selection and
+synchronized playback are not implemented yet, and both participants will eventually have equal
+playback controls.
 
 ## Requirements
 
@@ -38,8 +39,8 @@ the API server, so the browser uses a single origin during development.
 6. Closing or reloading one window marks that participant as reconnecting for up to 30 seconds;
    **Leave room** removes them.
 
-Invitation links point at the configured `WEB_ORIGIN`, which defaults to `localhost`. They work on
-this machine only until the app is deployed behind a shared origin.
+Invitation links point at the configured `WEB_ORIGIN`, which defaults to `localhost`. Set it to the
+deployed frontend origin when testing a hosted build.
 
 ## Commands
 
@@ -53,6 +54,15 @@ this machine only until the app is deployed behind a shared origin.
 | `npm test` | Run unit and integration tests with Vitest |
 | `npm run test:watch` | Run Vitest in watch mode |
 | `npm run start:server` | Start the API server without watch mode |
+
+## Test deployment
+
+The repository is prepared for a Vercel frontend and one Render backend instance. The backend is
+in-memory and must not be scaled beyond one instance. See [DEPLOYMENT.md](DEPLOYMENT.md) for the
+Render/Vercel environment variables, deployment order, CORS checks, and free-tier limitations.
+
+Production startup requires HTTPS, non-localhost `CORS_ORIGIN` and `WEB_ORIGIN` values. The
+frontend reads `VITE_API_URL` at build time; leave it unset for local development.
 
 ## Workspace layout
 
@@ -71,14 +81,18 @@ Server configuration lives in `apps/server/.env` (see `.env.example`):
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `NODE_ENV` | `development` | Runtime mode |
+| `HOST` | `127.0.0.1` locally, `0.0.0.0` in production | Interface the API binds to |
 | `PORT` | `3001` | API server port |
-| `CORS_ORIGIN` | `http://localhost:5173` | Allowed browser origin for API and Socket.IO |
+| `CORS_ORIGIN` | `http://localhost:5173` | Exact allowed browser origin for API and Socket.IO |
 | `WEB_ORIGIN` | `http://localhost:5173` | Base URL used to build invitation links |
 | `MAX_PARTICIPANTS` | `2` | Room capacity (1–10) |
 | `RECONNECT_GRACE_MS` | `30000` | How long a disconnected participant can reconnect |
 | `EMPTY_ROOM_TTL_MS` | `300000` | How long an empty room is kept before deletion |
 | `ROOM_MAX_AGE_MS` | `43200000` | Absolute room lifetime (12 hours) |
 | `CLEANUP_INTERVAL_MS` | `30000` | Expiry sweep interval |
+
+The web client reads `VITE_API_URL` at build time (see `apps/web/.env.example`). Leave it empty
+locally so the Vite proxy is used; set it to the public backend origin for a deployed build.
 
 No external services or secrets are required. Never commit `.env` files.
 

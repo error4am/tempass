@@ -190,8 +190,8 @@ export function Home() {
           </form>
 
           <p className="mt-4 text-xs leading-5 text-slate-500">
-            Invitation links are local to this development machine. Sharing behavior across
-            networks and deployments is planned for a later stage.
+            Open the invitation in another browser or private window to join as the second
+            participant.
           </p>
         </section>
       </div>

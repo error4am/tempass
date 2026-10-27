@@ -8,6 +8,8 @@ import {
   type RoomAccessResponse,
 } from "@tempass/shared";
 
+import { apiUrl } from "./config";
+
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
@@ -24,7 +26,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   let response: Response;
 
   try {
-    response = await fetch(path, {
+    response = await fetch(apiUrl(path), {
       ...init,
       headers: {
         "Content-Type": "application/json",

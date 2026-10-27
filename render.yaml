@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: tempass-server
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run start:server
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    numInstances: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: CORS_ORIGIN
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false
+      - key: MAX_PARTICIPANTS
+        value: 2
+      - key: RECONNECT_GRACE_MS
+        value: 30000
+      - key: EMPTY_ROOM_TTL_MS
+        value: 300000
+      - key: ROOM_MAX_AGE_MS
+        value: 43200000
+      - key: CLEANUP_INTERVAL_MS
+        value: 30000

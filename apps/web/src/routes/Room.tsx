@@ -357,7 +357,7 @@ export function Room({ roomId, session }: RoomProps) {
                 Invitation link
               </h2>
               <p className="mt-1 text-xs text-slate-500">
-                Works in another browser tab on this computer only.
+                Share it with the other participant.
               </p>
 
               <label htmlFor="invite-link" className="sr-only">
