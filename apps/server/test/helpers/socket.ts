@@ -2,6 +2,9 @@ import type {
   ChatMessage,
   ChatSendAck,
   ClientToServerEvents,
+  ClockSyncAck,
+  PlaybackCommandAck,
+  PlaybackUpdate,
   PresenceUpdate,
   RoomSnapshot,
   ServerToClientEvents,
@@ -109,6 +112,62 @@ export function sendChatMessage(socket: TestSocket, payload: unknown): Promise<C
     }, DEFAULT_TIMEOUT_MS);
 
     socket.emit("chat:message", payload, (ack) => {
+      clearTimeout(timer);
+      resolve(ack);
+    });
+  });
+}
+
+export function waitForPlaybackState(
+  socket: TestSocket,
+  predicate: (update: PlaybackUpdate) => boolean = () => true,
+): Promise<PlaybackUpdate> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.off("playback:state", onState);
+      reject(new Error("Timed out waiting for a matching playback:state"));
+    }, DEFAULT_TIMEOUT_MS);
+
+    const onState = (update: PlaybackUpdate) => {
+      if (!predicate(update)) {
+        return;
+      }
+
+      clearTimeout(timer);
+      socket.off("playback:state", onState);
+      resolve(update);
+    };
+
+    socket.on("playback:state", onState);
+  });
+}
+
+export function sendPlaybackCommand(
+  socket: TestSocket,
+  payload: unknown,
+): Promise<PlaybackCommandAck> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Timed out waiting for playback command acknowledgement"));
+    }, DEFAULT_TIMEOUT_MS);
+
+    socket.emit("playback:command", payload, (ack) => {
+      clearTimeout(timer);
+      resolve(ack);
+    });
+  });
+}
+
+export function sendClockSync(
+  socket: TestSocket,
+  payload: unknown,
+): Promise<ClockSyncAck> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Timed out waiting for clock synchronization acknowledgement"));
+    }, DEFAULT_TIMEOUT_MS);
+
+    socket.emit("clock:sync", payload, (ack) => {
       clearTimeout(timer);
       resolve(ack);
     });

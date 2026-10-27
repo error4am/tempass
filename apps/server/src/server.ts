@@ -16,6 +16,8 @@ export interface TempassRuntimeOptions {
   chatHistoryLimit?: number;
   chatRateLimitWindowMs?: number;
   chatRateLimitMaxMessages?: number;
+  playbackRateLimitWindowMs?: number;
+  playbackRateLimitMaxCommands?: number;
   corsOrigin?: string;
   webOrigin?: string;
   now?: RoomServiceOptions["now"];
@@ -50,6 +52,8 @@ export function createRuntime(options: TempassRuntimeOptions = {}): TempassRunti
     corsOrigin,
     chatRateLimitWindowMs: options.chatRateLimitWindowMs,
     chatRateLimitMaxMessages: options.chatRateLimitMaxMessages,
+    playbackRateLimitWindowMs: options.playbackRateLimitWindowMs,
+    playbackRateLimitMaxCommands: options.playbackRateLimitMaxCommands,
   });
 
   const sweep = () => {

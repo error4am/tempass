@@ -1,8 +1,12 @@
 import {
   CHAT_HISTORY_LIMIT,
+  playbackUpdateCommandSchema,
+  youtubeVideoIdSchema,
   type ChatMessage,
   type CreateRoomRequest,
   type JoinRoomRequest,
+  type PlaybackState,
+  type PlaybackUpdateCommand,
   type PresenceUpdate,
   type PublicParticipant,
   type PublicRoom,
@@ -35,6 +39,16 @@ const DEFAULTS = {
   roomMaxAgeMs: 43_200_000,
   chatHistoryLimit: CHAT_HISTORY_LIMIT,
 };
+
+function createIdlePlayback(now: number): PlaybackState {
+  return {
+    videoId: null,
+    status: "idle",
+    positionSeconds: 0,
+    updatedAt: now,
+    revision: 0,
+  };
+}
 
 export class RoomService {
   private readonly capacity: number;
@@ -69,6 +83,7 @@ export class RoomService {
       capacity: this.capacity,
       participants: new Map([[participant.id, participant]]),
       messages: [],
+      playback: createIdlePlayback(createdAt),
       emptySince: null,
     };
 
@@ -146,6 +161,7 @@ export class RoomService {
       self: this.toPublicParticipant(participant),
       participants: this.listParticipants(room),
       messages: [...room.messages],
+      playback: { ...room.playback },
       serverTime: this.now(),
     };
   }
@@ -153,6 +169,90 @@ export class RoomService {
   getChatHistory(roomId: string): ChatMessage[] | null {
     const room = this.getActiveRoom(roomId);
     return room ? [...room.messages] : null;
+  }
+
+  getPlayback(roomId: string): PlaybackState | null {
+    const room = this.getActiveRoom(roomId);
+    return room ? { ...room.playback } : null;
+  }
+
+  getServerTime(): number {
+    return this.now();
+  }
+
+  selectVideo(
+    roomId: string,
+    participantId: string,
+    socketId: string,
+    videoId: string,
+  ): PlaybackState | null {
+    const current = this.getCurrentParticipant(roomId, participantId, socketId);
+
+    if (!current) {
+      return null;
+    }
+
+    const parsedVideoId = youtubeVideoIdSchema.safeParse(videoId);
+
+    if (!parsedVideoId.success) {
+      throw new RoomError("INVALID_INPUT", "Invalid YouTube video ID");
+    }
+
+    current.room.playback = {
+      videoId: parsedVideoId.data,
+      status: "paused",
+      positionSeconds: 0,
+      updatedAt: this.now(),
+      revision: current.room.playback.revision + 1,
+    };
+
+    return { ...current.room.playback };
+  }
+
+  updatePlayback(
+    roomId: string,
+    participantId: string,
+    socketId: string,
+    command: PlaybackUpdateCommand,
+  ): PlaybackState | null {
+    const current = this.getCurrentParticipant(roomId, participantId, socketId);
+
+    if (!current) {
+      return null;
+    }
+
+    const parsedCommand = playbackUpdateCommandSchema.safeParse(command);
+
+    if (!parsedCommand.success) {
+      throw new RoomError("INVALID_INPUT", "Invalid playback command");
+    }
+
+    const { room } = current;
+    const playback = room.playback;
+    const update = parsedCommand.data;
+
+    if (playback.status === "idle" || playback.videoId === null) {
+      throw new RoomError("INVALID_INPUT", "Select a video before controlling playback");
+    }
+
+    if (update.videoId !== playback.videoId) {
+      throw new RoomError("VIDEO_MISMATCH");
+    }
+
+    room.playback = {
+      videoId: playback.videoId,
+      status:
+        update.action === "play"
+          ? "playing"
+          : update.action === "pause"
+            ? "paused"
+            : playback.status,
+      positionSeconds: update.positionSeconds,
+      updatedAt: this.now(),
+      revision: playback.revision + 1,
+    };
+
+    return { ...room.playback };
   }
 
   isCurrentSocket(roomId: string, participantId: string, socketId: string): boolean {

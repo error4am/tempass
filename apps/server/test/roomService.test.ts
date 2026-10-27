@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { MAX_PLAYBACK_POSITION_SECONDS } from "@tempass/shared";
 import { describe, expect, it } from "vitest";
 
 import { createTestContext } from "./helpers/context";
@@ -180,5 +181,259 @@ describe("RoomService", () => {
       roomService.markDisconnected(created.room.id, created.participant.id, "socket-1"),
     ).toBe(false);
     expect(roomService.getPresence(created.room.id)?.participants[0]?.connected).toBe(true);
+  });
+
+  describe("playback", () => {
+    const videoId = "dQw4w9WgXcQ";
+    const otherVideoId = "M7lc1UVf-VE";
+    const socketId = "socket-1";
+
+    async function createPlaybackFixture() {
+      let now = 1_000;
+      const { roomService } = createTestContext({ now: () => now });
+      const created = await roomService.createRoom({ displayName: "Alex" });
+
+      roomService.markConnected(created.room.id, created.participant.id, socketId);
+
+      return {
+        roomService,
+        created,
+        advance: (milliseconds: number) => {
+          now += milliseconds;
+        },
+      };
+    }
+
+    function captureRoomError(callback: () => unknown): unknown {
+      try {
+        callback();
+      } catch (error) {
+        return error;
+      }
+
+      return null;
+    }
+
+    it("starts idle and includes playback in snapshots", async () => {
+      const { roomService, created } = await createPlaybackFixture();
+      const idlePlayback = {
+        videoId: null,
+        status: "idle",
+        positionSeconds: 0,
+        updatedAt: 1_000,
+        revision: 0,
+      };
+
+      expect(roomService.getPlayback(created.room.id)).toEqual(idlePlayback);
+      expect(
+        roomService.getSnapshot(created.room.id, created.participant.id)?.playback,
+      ).toEqual(idlePlayback);
+      expect(roomService.getPlayback("AAAAAAAAAAAAAAAAAAAAAA")).toBeNull();
+    });
+
+    it("selects a video as paused at the start and advances the revision", async () => {
+      const { roomService, created, advance } = await createPlaybackFixture();
+
+      advance(500);
+      const selected = roomService.selectVideo(
+        created.room.id,
+        created.participant.id,
+        socketId,
+        videoId,
+      );
+
+      expect(selected).toEqual({
+        videoId,
+        status: "paused",
+        positionSeconds: 0,
+        updatedAt: 1_500,
+        revision: 1,
+      });
+      expect(roomService.getPlayback(created.room.id)).toEqual(selected);
+    });
+
+    it("applies play, pause, and seek commands with server timestamps", async () => {
+      const { roomService, created, advance } = await createPlaybackFixture();
+      const roomId = created.room.id;
+      const participantId = created.participant.id;
+
+      roomService.selectVideo(roomId, participantId, socketId, videoId);
+
+      advance(500);
+      expect(
+        roomService.updatePlayback(roomId, participantId, socketId, {
+          action: "play",
+          videoId,
+          positionSeconds: 12.5,
+        }),
+      ).toMatchObject({
+        videoId,
+        status: "playing",
+        positionSeconds: 12.5,
+        updatedAt: 1_500,
+        revision: 2,
+      });
+
+      advance(500);
+      expect(
+        roomService.updatePlayback(roomId, participantId, socketId, {
+          action: "seek",
+          videoId,
+          positionSeconds: 20,
+        }),
+      ).toMatchObject({
+        status: "playing",
+        positionSeconds: 20,
+        updatedAt: 2_000,
+        revision: 3,
+      });
+
+      advance(500);
+      expect(
+        roomService.updatePlayback(roomId, participantId, socketId, {
+          action: "pause",
+          videoId,
+          positionSeconds: 21,
+        }),
+      ).toMatchObject({
+        status: "paused",
+        positionSeconds: 21,
+        updatedAt: 2_500,
+        revision: 4,
+      });
+
+      advance(500);
+      expect(
+        roomService.updatePlayback(roomId, participantId, socketId, {
+          action: "seek",
+          videoId,
+          positionSeconds: 30,
+        }),
+      ).toMatchObject({
+        status: "paused",
+        positionSeconds: 30,
+        updatedAt: 3_000,
+        revision: 5,
+      });
+    });
+
+    it("rejects invalid video IDs, positions, and idle controls without mutating state", async () => {
+      const { roomService, created } = await createPlaybackFixture();
+      const roomId = created.room.id;
+      const participantId = created.participant.id;
+      const idlePlayback = roomService.getPlayback(roomId);
+
+      expect(
+        captureRoomError(() =>
+          roomService.selectVideo(roomId, participantId, socketId, "too-short"),
+        ),
+      ).toMatchObject({ code: "INVALID_INPUT" });
+      expect(
+        captureRoomError(() =>
+          roomService.updatePlayback(roomId, participantId, socketId, {
+            action: "play",
+            videoId,
+            positionSeconds: 0,
+          }),
+        ),
+      ).toMatchObject({ code: "INVALID_INPUT" });
+      expect(roomService.getPlayback(roomId)).toEqual(idlePlayback);
+
+      roomService.selectVideo(roomId, participantId, socketId, videoId);
+      const selectedPlayback = roomService.getPlayback(roomId);
+
+      for (const positionSeconds of [
+        -1,
+        Number.NaN,
+        Infinity,
+        MAX_PLAYBACK_POSITION_SECONDS + 1,
+      ]) {
+        expect(
+          captureRoomError(() =>
+            roomService.updatePlayback(roomId, participantId, socketId, {
+              action: "play",
+              videoId,
+              positionSeconds,
+            }),
+          ),
+        ).toMatchObject({ code: "INVALID_INPUT" });
+      }
+
+      expect(roomService.getPlayback(roomId)).toEqual(selectedPlayback);
+    });
+
+    it("rejects commands for a stale video without advancing the revision", async () => {
+      const { roomService, created } = await createPlaybackFixture();
+      const roomId = created.room.id;
+      const participantId = created.participant.id;
+
+      roomService.selectVideo(roomId, participantId, socketId, videoId);
+      const selectedPlayback = roomService.getPlayback(roomId);
+
+      expect(
+        captureRoomError(() =>
+          roomService.updatePlayback(roomId, participantId, socketId, {
+            action: "play",
+            videoId: otherVideoId,
+            positionSeconds: 10,
+          }),
+        ),
+      ).toMatchObject({ code: "VIDEO_MISMATCH" });
+      expect(roomService.getPlayback(roomId)).toEqual(selectedPlayback);
+    });
+
+    it("ignores commands from disconnected or stale sockets", async () => {
+      const { roomService, created } = await createPlaybackFixture();
+      const roomId = created.room.id;
+      const participantId = created.participant.id;
+
+      expect(
+        roomService.selectVideo(roomId, participantId, "stale-socket", videoId),
+      ).toBeNull();
+
+      roomService.markConnected(roomId, participantId, "socket-2");
+      expect(roomService.selectVideo(roomId, participantId, socketId, videoId)).toBeNull();
+
+      roomService.markDisconnected(roomId, participantId, "socket-2");
+      expect(
+        roomService.updatePlayback(roomId, participantId, "socket-2", {
+          action: "play",
+          videoId,
+          positionSeconds: 1,
+        }),
+      ).toBeNull();
+      expect(roomService.getPlayback(roomId)).toMatchObject({
+        videoId: null,
+        status: "idle",
+        revision: 0,
+      });
+    });
+
+    it("keeps playback isolated by room and removes it with the room", async () => {
+      const { roomService, created, advance } = await createPlaybackFixture();
+      const second = await roomService.createRoom({ displayName: "Bea" });
+
+      roomService.selectVideo(
+        created.room.id,
+        created.participant.id,
+        socketId,
+        videoId,
+      );
+
+      expect(roomService.getPlayback(created.room.id)).toMatchObject({
+        videoId,
+        revision: 1,
+      });
+      expect(roomService.getPlayback(second.room.id)).toMatchObject({
+        videoId: null,
+        status: "idle",
+        revision: 0,
+      });
+
+      advance(60_000);
+
+      expect(roomService.getPlayback(created.room.id)).toBeNull();
+      expect(roomService.getPlayback(second.room.id)).toBeNull();
+    });
   });
 });

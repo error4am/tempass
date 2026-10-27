@@ -6,6 +6,7 @@ const STATUS_BY_CODE: Record<RoomErrorCode, number> = {
   BAD_PASSWORD: 401,
   INVALID_INPUT: 400,
   UNAUTHORIZED: 401,
+  VIDEO_MISMATCH: 409,
   INTERNAL: 500,
 };
 
@@ -15,6 +16,7 @@ const MESSAGE_BY_CODE: Record<RoomErrorCode, string> = {
   BAD_PASSWORD: "Incorrect room password",
   INVALID_INPUT: "Invalid request data",
   UNAUTHORIZED: "Not authorized",
+  VIDEO_MISMATCH: "Playback video is no longer current",
   INTERNAL: "Something went wrong",
 };
 

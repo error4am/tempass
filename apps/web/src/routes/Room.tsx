@@ -1,20 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   CHAT_HISTORY_LIMIT,
   SOCKET_EVENTS,
   type ChatMessage,
   type ChatSendAck,
+  type PlaybackCommand,
+  type PlaybackCommandAck,
   type PublicParticipant,
   type RoomSnapshot,
 } from "@tempass/shared";
 
 import { ChatPanel } from "../components/ChatPanel";
 import { Shell } from "../components/Shell";
+import { WatchStage } from "../components/WatchStage";
 import { roomErrorMessage } from "../lib/roomErrors";
 import { navigate } from "../lib/router";
 import { clearSession, type RoomSession } from "../lib/session";
+import { sendPlaybackCommand } from "../realtime/playback";
 import { connectRoomSocket, type RoomSocket } from "../realtime/socket";
+import { useRoomPlayback } from "../realtime/useRoomPlayback";
+import { useServerClock } from "../realtime/useServerClock";
 
 type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "error";
 
@@ -45,23 +51,33 @@ export function Room({ roomId, session }: RoomProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [socket, setSocket] = useState<RoomSocket | null>(null);
   const socketRef = useRef<RoomSocket | null>(null);
+  const { playback, applyUpdate } = useRoomPlayback(roomId, socket, snapshot);
+  const serverClock = useServerClock(roomId, socket);
+
+  const handlePlaybackCommand = useCallback(
+    (command: PlaybackCommand): Promise<PlaybackCommandAck> =>
+      sendPlaybackCommand(socket, command, { onAccepted: applyUpdate }),
+    [applyUpdate, socket],
+  );
 
   const inviteUrl = `${window.location.origin}/join/${roomId}`;
 
   useEffect(() => {
-    const socket = connectRoomSocket(session.token);
-    socketRef.current = socket;
+    const roomSocket = connectRoomSocket(session.token);
+    socketRef.current = roomSocket;
+    setSocket(roomSocket);
 
     setStatus("connecting");
     setErrorMessage(null);
 
-    socket.on("connect", () => {
+    roomSocket.on("connect", () => {
       setStatus("connected");
       setErrorMessage(null);
     });
 
-    socket.on("disconnect", (reason) => {
+    roomSocket.on("disconnect", (reason) => {
       if (reason === "io client disconnect") {
         return;
       }
@@ -76,21 +92,21 @@ export function Room({ roomId, session }: RoomProps) {
       setStatus("reconnecting");
     });
 
-    socket.on("connect_error", (error) => {
+    roomSocket.on("connect_error", (error) => {
       const code = (error as Error & { data?: { code?: string } }).data?.code;
 
       if (code === "UNAUTHORIZED" || code === "ROOM_NOT_FOUND") {
         setStatus("error");
         setErrorMessage(roomErrorMessage(code, error.message));
         clearSession(roomId);
-        socket.disconnect();
+        roomSocket.disconnect();
         return;
       }
 
       setStatus("reconnecting");
     });
 
-    socket.on(SOCKET_EVENTS.ROOM_SNAPSHOT, (nextSnapshot) => {
+    roomSocket.on(SOCKET_EVENTS.ROOM_SNAPSHOT, (nextSnapshot) => {
       setSnapshot(nextSnapshot);
       setParticipants(nextSnapshot.participants);
       setMessages(nextSnapshot.messages);
@@ -98,11 +114,11 @@ export function Room({ roomId, session }: RoomProps) {
       setErrorMessage(null);
     });
 
-    socket.on(SOCKET_EVENTS.PRESENCE_UPDATE, (update) => {
+    roomSocket.on(SOCKET_EVENTS.PRESENCE_UPDATE, (update) => {
       setParticipants(update.participants);
     });
 
-    socket.on(SOCKET_EVENTS.CHAT_MESSAGE, (message) => {
+    roomSocket.on(SOCKET_EVENTS.CHAT_MESSAGE, (message) => {
       setMessages((current) => {
         if (current.some((existing) => existing.id === message.id)) {
           return current;
@@ -114,9 +130,10 @@ export function Room({ roomId, session }: RoomProps) {
     });
 
     return () => {
-      socket.removeAllListeners();
-      socket.disconnect();
+      roomSocket.removeAllListeners();
+      roomSocket.disconnect();
       socketRef.current = null;
+      setSocket((current) => (current === roomSocket ? null : current));
     };
   }, [roomId, session.token]);
 
@@ -266,26 +283,12 @@ export function Room({ roomId, session }: RoomProps) {
         ) : null}
 
         <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)]">
-          <section
-            aria-labelledby="room-stage-heading"
-            className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-5"
-          >
-            <h2 id="room-stage-heading" className="text-sm font-semibold text-slate-200">
-              Watch together
-            </h2>
-            <p className="mt-1 text-sm text-slate-400">
-              The YouTube player arrives in a later milestone.
-            </p>
-
-            <div className="mt-4 flex aspect-video items-center justify-center rounded-xl border border-dashed border-white/10 bg-slate-900/50 px-6 text-center">
-              <div>
-                <p className="text-sm font-medium text-slate-300">Shared playback is next</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Room creation, invitation, presence, and chat are working now.
-                </p>
-              </div>
-            </div>
-          </section>
+          <WatchStage
+            playback={playback}
+            connected={status === "connected"}
+            clockOffsetMs={serverClock.offsetMs}
+            onCommand={handlePlaybackCommand}
+          />
 
           <ChatPanel
             messages={messages}

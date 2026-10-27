@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@tempass/shared";
+import type { ChatMessage, PlaybackState } from "@tempass/shared";
 
 export interface StoredParticipant {
   id: string;
@@ -17,6 +17,7 @@ export interface StoredRoom {
   capacity: number;
   participants: Map<string, StoredParticipant>;
   messages: ChatMessage[];
+  playback: PlaybackState;
   emptySince: number | null;
 }
 
