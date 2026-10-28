@@ -296,11 +296,11 @@ export function YouTubePlayer({
         return;
       }
 
-      // If the player is already playing (e.g. from native controls or the custom
-      // play button) and the canonical state changed to paused mid-playback, do not
-      // spuriously attempt to pause. The applyCanonicalPlayback effect is
-      // responsible for triggering pause; a mid-state player that is playing must
-      // not be re-interfered with by the drift check.
+      // If the player is already playing and the canonical state changed to paused
+      // mid-transition, do not spuriously attempt to pause. The
+      // applyCanonicalPlayback effect is responsible for triggering pause; a
+      // mid-state player that is playing must not be re-interfered with by the
+      // drift check.
       if (state.status === "paused" && playerState === PLAYER_STATE_PLAYING) {
         return;
       }
@@ -937,7 +937,10 @@ export function YouTubePlayer({
   return (
     <div className="mt-4">
       <div className="relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black">
-        <div ref={mountRef} className="absolute inset-0" />
+        <div
+          ref={mountRef}
+          className="pointer-events-none absolute inset-0"
+        />
 
         {apiStatus === "loading" ? (
           <div className="absolute inset-0 flex items-center justify-center px-6 text-center">

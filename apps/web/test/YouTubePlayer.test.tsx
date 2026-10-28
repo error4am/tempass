@@ -199,6 +199,15 @@ describe("YouTubePlayer", () => {
     expect(player.destroy).toHaveBeenCalledTimes(1);
   });
 
+  it("blocks pointer input on the embedded player mount", async () => {
+    const { container } = await renderPlayer();
+
+    const mount = container.querySelector(".aspect-video > div");
+
+    expect(mount).not.toBeNull();
+    expect(mount?.classList.contains("pointer-events-none")).toBe(true);
+  });
+
   it("sends play and pause commands from the custom controls", async () => {
     const { player, onCommand } = await renderPlayer();
 
