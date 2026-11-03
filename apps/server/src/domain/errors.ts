@@ -7,6 +7,11 @@ const STATUS_BY_CODE: Record<RoomErrorCode, number> = {
   INVALID_INPUT: 400,
   UNAUTHORIZED: 401,
   VIDEO_MISMATCH: 409,
+  MEDIA_NOT_FOUND: 404,
+  UNSUPPORTED_MEDIA_TYPE: 415,
+  MEDIA_TOO_LARGE: 413,
+  MEDIA_LIMIT_REACHED: 413,
+  RATE_LIMITED: 429,
   INTERNAL: 500,
 };
 
@@ -17,6 +22,11 @@ const MESSAGE_BY_CODE: Record<RoomErrorCode, string> = {
   INVALID_INPUT: "Invalid request data",
   UNAUTHORIZED: "Not authorized",
   VIDEO_MISMATCH: "Playback video is no longer current",
+  MEDIA_NOT_FOUND: "Image not found or expired",
+  UNSUPPORTED_MEDIA_TYPE: "Only JPEG, PNG, WebP, and GIF images are supported",
+  MEDIA_TOO_LARGE: "That image is too large",
+  MEDIA_LIMIT_REACHED: "This room has reached its image storage limit",
+  RATE_LIMITED: "Too many requests",
   INTERNAL: "Something went wrong",
 };
 

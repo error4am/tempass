@@ -23,12 +23,32 @@ const CHAT_ERROR_MESSAGES: Record<string, string> = {
   INTERNAL: "Could not send the message. Please try again.",
 };
 
+const MEDIA_ERROR_MESSAGES: Record<string, string> = {
+  INVALID_INPUT: "That image could not be uploaded. Check the file and try again.",
+  UNSUPPORTED_MEDIA_TYPE: "Choose a JPEG, PNG, WebP, or GIF image.",
+  MEDIA_TOO_LARGE: "That image is too large. Choose a smaller file.",
+  MEDIA_LIMIT_REACHED: "This room has reached its image storage limit.",
+  RATE_LIMITED: "You are uploading images too quickly. Wait a moment and try again.",
+  UNAUTHORIZED: "Your room session expired. Join the room again to share images.",
+  MEDIA_NOT_FOUND: "That image is no longer available.",
+  NETWORK: "Could not reach the Tempass server. Check your connection and try again.",
+  INTERNAL: "Could not upload the image. Please try again.",
+};
+
 export function roomErrorMessage(code: string, fallback?: string): string {
   return ROOM_ERROR_MESSAGES[code] ?? fallback ?? ROOM_ERROR_MESSAGES.INTERNAL ?? "Something went wrong.";
 }
 
 export function chatErrorMessage(code: string): string {
   return CHAT_ERROR_MESSAGES[code] ?? CHAT_ERROR_MESSAGES.INTERNAL ?? "Could not send the message.";
+}
+
+export function mediaErrorMessage(code: string): string {
+  return (
+    MEDIA_ERROR_MESSAGES[code] ??
+    MEDIA_ERROR_MESSAGES.INTERNAL ??
+    "Could not upload the image. Please try again."
+  );
 }
 
 export function playbackErrorMessage(code: string): string {

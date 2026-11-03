@@ -1,19 +1,47 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 
 import {
+  CHAT_IMAGE_MIME_TYPES,
+  MAX_CHAT_IMAGE_BYTES,
   MAX_CHAT_MESSAGE_LENGTH,
+  type ChatMedia,
   type ChatMessage,
   type ChatSendAck,
 } from "@tempass/shared";
 
-import { chatErrorMessage } from "../lib/roomErrors";
+import { chatErrorMessage, mediaErrorMessage } from "../lib/roomErrors";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
   selfId: string;
   connected: boolean;
-  onSend: (text: string) => Promise<ChatSendAck>;
+  onSend: (text: string, mediaId?: string) => Promise<ChatSendAck>;
+  onUploadImage?: (
+    file: File,
+    options: { onProgress: (fraction: number) => void; signal: AbortSignal },
+  ) => Promise<ChatMedia>;
+  loadImageUrl?: (mediaId: string) => Promise<string>;
 }
+
+interface PendingImage {
+  file: File;
+  previewUrl: string;
+}
+
+interface ViewerImage {
+  url: string;
+  alt: string;
+}
+
+const ACCEPTED_IMAGE_TYPES = CHAT_IMAGE_MIME_TYPES.join(",");
+const MAX_IMAGE_MEGABYTES = Math.round(MAX_CHAT_IMAGE_BYTES / (1024 * 1024));
 
 function formatTimestamp(value: string): string {
   const date = new Date(value);
@@ -30,15 +58,30 @@ function formatTimestamp(value: string): string {
   });
 }
 
-export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProps) {
+export function ChatPanel({
+  messages,
+  selfId,
+  connected,
+  onSend,
+  onUploadImage,
+  loadImageUrl,
+}: ChatPanelProps) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
+  const [uploadedMedia, setUploadedMedia] = useState<ChatMedia | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [viewer, setViewer] = useState<ViewerImage | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
   const restoreFocus = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
+  const uploadController = useRef<AbortController | null>(null);
+  const previewUrl = useRef<string | null>(null);
 
   useEffect(() => {
     if (!stickToBottom.current) {
@@ -68,6 +111,36 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
     }
   }, [sending]);
 
+  useEffect(() => {
+    return () => {
+      uploadController.current?.abort();
+      uploadController.current = null;
+
+      if (previewUrl.current) {
+        URL.revokeObjectURL(previewUrl.current);
+        previewUrl.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!viewer) {
+      return;
+    }
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setViewer(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [viewer]);
+
   function handleScroll() {
     const container = scrollRef.current;
 
@@ -79,15 +152,113 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
       container.scrollHeight - container.scrollTop - container.clientHeight < 80;
   }
 
+  function clearImage() {
+    uploadController.current?.abort();
+    uploadController.current = null;
+
+    if (previewUrl.current) {
+      URL.revokeObjectURL(previewUrl.current);
+      previewUrl.current = null;
+    }
+
+    setPendingImage(null);
+    setUploadedMedia(null);
+    setUploading(false);
+    setUploadProgress(0);
+  }
+
+  function startUpload(file: File) {
+    if (!onUploadImage) {
+      setError("Image sharing is not available right now.");
+      return;
+    }
+
+    clearImage();
+
+    const controller = new AbortController();
+    uploadController.current = controller;
+    const nextPreviewUrl = URL.createObjectURL(file);
+    previewUrl.current = nextPreviewUrl;
+
+    setPendingImage({ file, previewUrl: nextPreviewUrl });
+    setUploadedMedia(null);
+    setUploading(true);
+    setUploadProgress(0);
+    setError(null);
+
+    void onUploadImage(file, {
+      onProgress: (fraction) => {
+        if (uploadController.current === controller) {
+          setUploadProgress(Math.min(1, Math.max(0, fraction)));
+        }
+      },
+      signal: controller.signal,
+    })
+      .then((media) => {
+        if (uploadController.current !== controller) {
+          return;
+        }
+
+        uploadController.current = null;
+        setUploadedMedia(media);
+        setUploading(false);
+        setUploadProgress(1);
+      })
+      .catch((uploadError: unknown) => {
+        if (uploadController.current !== controller) {
+          return;
+        }
+
+        if ((uploadError as { name?: string }).name === "AbortError") {
+          return;
+        }
+
+        setUploading(false);
+        setError(mediaErrorMessage((uploadError as { code?: string }).code ?? "INTERNAL"));
+      });
+  }
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!(CHAT_IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) {
+      setError("Choose a JPEG, PNG, WebP, or GIF image.");
+      return;
+    }
+
+    if (file.size > MAX_CHAT_IMAGE_BYTES) {
+      setError(`Images must be ${MAX_IMAGE_MEGABYTES} MB or smaller.`);
+      return;
+    }
+
+    startUpload(file);
+  }
+
+  function retryUpload() {
+    if (pendingImage) {
+      startUpload(pendingImage.file);
+    }
+  }
+
   async function submitMessage() {
     if (sending || !connected) {
       return;
     }
 
+    if (uploading) {
+      setError("Wait for the image to finish uploading.");
+      return;
+    }
+
     const text = draft.trim();
 
-    if (!text) {
-      setError("Enter a message before sending.");
+    if (!text && !uploadedMedia) {
+      setError("Enter a message or attach an image before sending.");
       return;
     }
 
@@ -101,11 +272,12 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
     setError(null);
 
     try {
-      const ack = await onSend(text);
+      const ack = uploadedMedia ? await onSend(text, uploadedMedia.id) : await onSend(text);
 
       if (ack.ok) {
         restoreFocus.current = true;
         setDraft("");
+        clearImage();
       } else {
         setError(chatErrorMessage(ack.code));
       }
@@ -121,7 +293,7 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
     void submitMessage();
   }
 
-  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
       return;
     }
@@ -129,6 +301,10 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
     event.preventDefault();
     void submitMessage();
   }
+
+  const sendDisabled =
+    !connected || sending || uploading || (draft.trim().length === 0 && !uploadedMedia);
+  const attachDisabled = !connected || sending || uploading;
 
   return (
     <section
@@ -192,9 +368,18 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
                       {formatTimestamp(message.sentAt)}
                     </time>
                   </div>
-                  <p className="mt-1 min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-6 text-slate-300">
-                    {message.text}
-                  </p>
+                  {message.media ? (
+                    <MessageImage
+                      media={message.media}
+                      loadImageUrl={loadImageUrl}
+                      onOpen={setViewer}
+                    />
+                  ) : null}
+                  {message.text ? (
+                    <p className="mt-1 min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-6 text-slate-300">
+                      {message.text}
+                    </p>
+                  ) : null}
                 </li>
               );
             })}
@@ -222,13 +407,85 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
           className="block w-full min-w-0 resize-none rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-rose-400/60 focus:outline-none focus:ring-2 focus:ring-rose-400/20 disabled:cursor-not-allowed disabled:opacity-60"
         />
 
+        {pendingImage ? (
+          <div className="flex min-w-0 items-center gap-3 rounded-xl border border-white/10 bg-slate-900/60 p-2">
+            <img
+              src={pendingImage.previewUrl}
+              alt="Selected image preview"
+              className="h-14 w-14 shrink-0 rounded-lg object-cover"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs text-slate-300">{pendingImage.file.name}</p>
+              {uploading ? (
+                <div className="mt-1 flex items-center gap-2">
+                  <progress
+                    aria-label="Upload progress"
+                    value={Math.round(uploadProgress * 100)}
+                    max={100}
+                    className="h-1 min-w-0 flex-1"
+                  />
+                  <span className="shrink-0 text-[11px] text-slate-500">
+                    {Math.round(uploadProgress * 100)}%
+                  </span>
+                </div>
+              ) : uploadedMedia ? (
+                <p className="mt-1 text-[11px] text-emerald-300">Ready to send</p>
+              ) : (
+                <p className="mt-1 text-[11px] text-slate-500">Upload failed</p>
+              )}
+            </div>
+            {!uploading && !uploadedMedia ? (
+              <button
+                type="button"
+                onClick={retryUpload}
+                className="h-8 shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 text-[11px] font-medium text-slate-300 transition hover:bg-white/10"
+              >
+                Retry
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={clearImage}
+              className="h-8 shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 text-[11px] font-medium text-slate-300 transition hover:bg-white/10"
+            >
+              Remove
+            </button>
+          </div>
+        ) : null}
+
         <div className="flex min-w-0 items-center justify-between gap-3">
-          <span className="min-w-0 truncate text-[11px] text-slate-500">
-            {draft.length}/{MAX_CHAT_MESSAGE_LENGTH} · Enter sends, Shift+Enter adds a line
-          </span>
+          <div className="flex min-w-0 items-center gap-2">
+            {onUploadImage ? (
+              <>
+                <input
+                  ref={fileInputRef}
+                  id="chat-image-input"
+                  type="file"
+                  accept={ACCEPTED_IMAGE_TYPES}
+                  aria-label="Image file"
+                  className="sr-only"
+                  onChange={handleFileChange}
+                  disabled={attachDisabled}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Attach image"
+                  title={`Attach an image (max ${MAX_IMAGE_MEGABYTES} MB)`}
+                  disabled={attachDisabled}
+                  className="h-9 shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Image
+                </button>
+              </>
+            ) : null}
+            <span className="min-w-0 truncate text-[11px] text-slate-500">
+              {draft.length}/{MAX_CHAT_MESSAGE_LENGTH} · Enter sends, Shift+Enter adds a line
+            </span>
+          </div>
           <button
             type="submit"
-            disabled={!connected || sending}
+            disabled={sendDisabled}
             className="h-9 shrink-0 rounded-lg bg-rose-500 px-4 text-xs font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {sending ? "Sending…" : "Send"}
@@ -241,6 +498,102 @@ export function ChatPanel({ messages, selfId, connected, onSend }: ChatPanelProp
           </p>
         ) : null}
       </form>
+
+      {viewer ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Shared image"
+          onClick={() => setViewer(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4"
+        >
+          <button
+            type="button"
+            aria-label="Close image"
+            onClick={() => setViewer(null)}
+            className="absolute right-4 top-4 rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
+          >
+            Close
+          </button>
+          <img
+            src={viewer.url}
+            alt={viewer.alt}
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-full max-w-full rounded-xl"
+          />
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+interface MessageImageProps {
+  media: ChatMedia;
+  loadImageUrl?: (mediaId: string) => Promise<string>;
+  onOpen: (image: ViewerImage) => void;
+}
+
+function MessageImage({ media, loadImageUrl, onOpen }: MessageImageProps) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!loadImageUrl) {
+      setFailed(true);
+      return;
+    }
+
+    let active = true;
+    setUrl(null);
+    setFailed(false);
+
+    void loadImageUrl(media.id)
+      .then((nextUrl) => {
+        if (active) {
+          setUrl(nextUrl);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setFailed(true);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [media.id, loadImageUrl]);
+
+  if (failed) {
+    return <p className="mt-1 text-xs text-slate-500">Image unavailable.</p>;
+  }
+
+  if (!url) {
+    return (
+      <div
+        aria-hidden="true"
+        className="mt-1 max-h-64 w-full animate-pulse rounded-lg border border-white/5 bg-slate-900/60"
+        style={{ aspectRatio: `${media.width} / ${media.height}` }}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen({ url, alt: "Shared image" })}
+      aria-label="Open image"
+      className="mt-1 block max-w-full cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-400/40"
+    >
+      <img
+        src={url}
+        alt="Shared image"
+        width={media.width}
+        height={media.height}
+        loading="lazy"
+        decoding="async"
+        className="max-h-64 w-auto max-w-full rounded-lg border border-white/5"
+      />
+    </button>
   );
 }

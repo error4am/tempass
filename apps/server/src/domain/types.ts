@@ -1,5 +1,7 @@
 import type { ChatMessage, PlaybackState } from "@tempass/shared";
 
+import type { MediaStore } from "../storage/mediaStore";
+
 export interface StoredParticipant {
   id: string;
   displayName: string;
@@ -32,6 +34,7 @@ export interface RoomServiceOptions {
   emptyRoomTtlMs: number;
   roomMaxAgeMs: number;
   chatHistoryLimit: number;
+  mediaStore?: MediaStore;
   now: () => number;
 }
 

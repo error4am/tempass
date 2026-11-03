@@ -1,7 +1,11 @@
 import {
   CHAT_HISTORY_LIMIT,
+  GLOBAL_MEDIA_MAX_BYTES,
+  MAX_CHAT_IMAGE_BYTES,
+  ROOM_MEDIA_MAX_BYTES,
   playbackUpdateCommandSchema,
   youtubeVideoIdSchema,
+  type ChatMedia,
   type ChatMessage,
   type CreateRoomRequest,
   type JoinRoomRequest,
@@ -21,6 +25,8 @@ import {
   createSessionToken,
   hashToken,
 } from "../security/tokens";
+import type { MediaStore } from "../storage/mediaStore";
+import { MemoryMediaStore } from "../storage/mediaStore";
 import type { RoomRepository } from "../storage/roomRepository";
 import { RoomError } from "./errors";
 import type {
@@ -57,6 +63,7 @@ export class RoomService {
   private readonly roomMaxAgeMs: number;
   private readonly chatHistoryLimit: number;
   private readonly now: () => number;
+  readonly mediaStore: MediaStore;
   private readonly sessions = new Map<string, StoredSession>();
 
   constructor(
@@ -68,6 +75,13 @@ export class RoomService {
     this.emptyRoomTtlMs = options.emptyRoomTtlMs ?? DEFAULTS.emptyRoomTtlMs;
     this.roomMaxAgeMs = options.roomMaxAgeMs ?? DEFAULTS.roomMaxAgeMs;
     this.chatHistoryLimit = options.chatHistoryLimit ?? DEFAULTS.chatHistoryLimit;
+    this.mediaStore =
+      options.mediaStore ??
+      new MemoryMediaStore({
+        maxImageBytes: MAX_CHAT_IMAGE_BYTES,
+        roomMaxBytes: ROOM_MEDIA_MAX_BYTES,
+        globalMaxBytes: GLOBAL_MEDIA_MAX_BYTES,
+      });
     this.now = options.now ?? (() => Date.now());
   }
 
@@ -264,6 +278,7 @@ export class RoomService {
     participantId: string,
     socketId: string,
     text: string,
+    mediaId?: string,
   ): ChatMessage | null {
     const current = this.getCurrentParticipant(roomId, participantId, socketId);
 
@@ -272,12 +287,31 @@ export class RoomService {
     }
 
     const { room, participant } = current;
+    let media: ChatMedia | undefined;
+
+    if (mediaId !== undefined) {
+      const stored = this.mediaStore.find(roomId, mediaId);
+
+      if (!stored) {
+        throw new RoomError("MEDIA_NOT_FOUND");
+      }
+
+      media = {
+        id: stored.id,
+        mimeType: stored.mimeType,
+        sizeBytes: stored.sizeBytes,
+        width: stored.width,
+        height: stored.height,
+      };
+    }
+
     const message: ChatMessage = {
       id: createMessageId(),
       senderId: participant.id,
       senderName: participant.displayName,
       text,
       sentAt: new Date(this.now()).toISOString(),
+      ...(media ? { media } : {}),
     };
 
     room.messages.push(message);
@@ -519,6 +553,7 @@ export class RoomService {
       this.sessions.delete(participant.tokenHash);
     }
 
+    this.mediaStore.deleteByRoom(room.id);
     this.repository.delete(room.id);
   }
 

@@ -1,3 +1,4 @@
+import { GLOBAL_MEDIA_MAX_BYTES } from "@tempass/shared";
 import { z } from "zod";
 
 if (process.env.NODE_ENV !== "test") {
@@ -31,6 +32,12 @@ const envSchema = z
     EMPTY_ROOM_TTL_MS: z.coerce.number().int().min(1_000).default(300_000),
     ROOM_MAX_AGE_MS: z.coerce.number().int().min(60_000).default(43_200_000),
     CLEANUP_INTERVAL_MS: z.coerce.number().int().min(1_000).default(30_000),
+    MEDIA_GLOBAL_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1_024 * 1_024)
+      .max(8 * 1_024 * 1_024 * 1_024)
+      .default(GLOBAL_MEDIA_MAX_BYTES),
   })
   .superRefine((value, context) => {
     if (value.NODE_ENV !== "production") {
@@ -74,6 +81,7 @@ export interface AppConfig {
   emptyRoomTtlMs: number;
   roomMaxAgeMs: number;
   cleanupIntervalMs: number;
+  mediaGlobalMaxBytes: number;
 }
 
 export function parseConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -98,6 +106,7 @@ export function parseConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     emptyRoomTtlMs: parsed.data.EMPTY_ROOM_TTL_MS,
     roomMaxAgeMs: parsed.data.ROOM_MAX_AGE_MS,
     cleanupIntervalMs: parsed.data.CLEANUP_INTERVAL_MS,
+    mediaGlobalMaxBytes: parsed.data.MEDIA_GLOBAL_MAX_BYTES,
   };
 }
 

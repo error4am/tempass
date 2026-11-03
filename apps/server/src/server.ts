@@ -1,10 +1,13 @@
 import { createServer as createHttpServer } from "node:http";
 
+import { MAX_CHAT_IMAGE_BYTES, ROOM_MEDIA_MAX_BYTES } from "@tempass/shared";
+
 import { createApp } from "./app";
 import { config } from "./config";
 import { RoomService } from "./domain/roomService";
 import type { RoomServiceOptions } from "./domain/types";
 import { attachRealtime, broadcastRoomPresence } from "./realtime/io";
+import { MemoryMediaStore } from "./storage/mediaStore";
 import { MemoryRoomRepository } from "./storage/memoryRoomRepository";
 
 export interface TempassRuntimeOptions {
@@ -18,6 +21,11 @@ export interface TempassRuntimeOptions {
   chatRateLimitMaxMessages?: number;
   playbackRateLimitWindowMs?: number;
   playbackRateLimitMaxCommands?: number;
+  mediaMaxImageBytes?: number;
+  mediaRoomMaxBytes?: number;
+  mediaGlobalMaxBytes?: number;
+  mediaUploadRateLimitWindowMs?: number;
+  mediaUploadRateLimitMaxUploads?: number;
   corsOrigin?: string;
   webOrigin?: string;
   now?: RoomServiceOptions["now"];
@@ -37,16 +45,31 @@ export function createRuntime(options: TempassRuntimeOptions = {}): TempassRunti
   const webOrigin = options.webOrigin ?? config.webOrigin;
   const cleanupIntervalMs = options.cleanupIntervalMs ?? config.cleanupIntervalMs;
 
+  const mediaStore = new MemoryMediaStore({
+    maxImageBytes: options.mediaMaxImageBytes ?? MAX_CHAT_IMAGE_BYTES,
+    roomMaxBytes: options.mediaRoomMaxBytes ?? ROOM_MEDIA_MAX_BYTES,
+    globalMaxBytes: options.mediaGlobalMaxBytes ?? config.mediaGlobalMaxBytes,
+  });
+
   const roomService = new RoomService(new MemoryRoomRepository(), {
     capacity: options.capacity ?? config.maxParticipants,
     reconnectGraceMs: options.reconnectGraceMs ?? config.reconnectGraceMs,
     emptyRoomTtlMs: options.emptyRoomTtlMs ?? config.emptyRoomTtlMs,
     roomMaxAgeMs: options.roomMaxAgeMs ?? config.roomMaxAgeMs,
     chatHistoryLimit: options.chatHistoryLimit,
+    mediaStore,
     ...(options.now ? { now: options.now } : {}),
   });
 
-  const app = createApp({ roomService, webOrigin, corsOrigin });
+  const app = createApp({
+    roomService,
+    webOrigin,
+    corsOrigin,
+    mediaOptions: {
+      uploadRateLimitWindowMs: options.mediaUploadRateLimitWindowMs,
+      uploadRateLimitMaxUploads: options.mediaUploadRateLimitMaxUploads,
+    },
+  });
   const httpServer = createHttpServer(app);
   const io = attachRealtime(httpServer, roomService, {
     corsOrigin,

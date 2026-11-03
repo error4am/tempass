@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   CHAT_HISTORY_LIMIT,
@@ -14,6 +14,7 @@ import {
 import { ChatPanel } from "../components/ChatPanel";
 import { Shell } from "../components/Shell";
 import { WatchStage } from "../components/WatchStage";
+import { createChatMediaLoader, uploadChatImage } from "../lib/media";
 import { roomErrorMessage } from "../lib/roomErrors";
 import { navigate } from "../lib/router";
 import { clearSession, type RoomSession } from "../lib/session";
@@ -55,6 +56,21 @@ export function Room({ roomId, session }: RoomProps) {
   const socketRef = useRef<RoomSocket | null>(null);
   const { playback, applyUpdate } = useRoomPlayback(roomId, socket, snapshot);
   const serverClock = useServerClock(roomId, socket);
+
+  const mediaLoader = useMemo(
+    () => createChatMediaLoader(roomId, session.token),
+    [roomId, session.token],
+  );
+
+  useEffect(() => () => mediaLoader.dispose(), [mediaLoader]);
+
+  const handleUploadImage = useCallback(
+    (
+      file: File,
+      options: { onProgress: (fraction: number) => void; signal: AbortSignal },
+    ) => uploadChatImage(roomId, session.token, file, options),
+    [roomId, session.token],
+  );
 
   const handlePlaybackCommand = useCallback(
     (command: PlaybackCommand): Promise<PlaybackCommandAck> =>
@@ -137,7 +153,7 @@ export function Room({ roomId, session }: RoomProps) {
     };
   }, [roomId, session.token]);
 
-  function sendChatMessage(text: string): Promise<ChatSendAck> {
+  function sendChatMessage(text: string, mediaId?: string): Promise<ChatSendAck> {
     const socket = socketRef.current;
 
     if (!socket?.connected) {
@@ -160,7 +176,11 @@ export function Room({ roomId, session }: RoomProps) {
         resolve(ack);
       }
 
-      socket.emit(SOCKET_EVENTS.CHAT_MESSAGE, { text }, finish);
+      socket.emit(
+        SOCKET_EVENTS.CHAT_MESSAGE,
+        mediaId ? { text, mediaId } : { text },
+        finish,
+      );
     });
   }
 
@@ -295,6 +315,8 @@ export function Room({ roomId, session }: RoomProps) {
             selfId={session.participantId}
             connected={status === "connected"}
             onSend={sendChatMessage}
+            onUploadImage={handleUploadImage}
+            loadImageUrl={mediaLoader.load}
           />
         </div>
 

@@ -11,6 +11,20 @@ export const CHAT_HISTORY_LIMIT = 100;
 export const YOUTUBE_VIDEO_ID_LENGTH = 11;
 export const MAX_PLAYBACK_POSITION_SECONDS = 86_400;
 
+export const MEDIA_ID_LENGTH = 22;
+export const MAX_CHAT_IMAGE_BYTES = 10 * 1024 * 1024;
+export const ROOM_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
+export const GLOBAL_MEDIA_MAX_BYTES = 256 * 1024 * 1024;
+
+export const CHAT_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+] as const;
+
+export type ChatImageMimeType = (typeof CHAT_IMAGE_MIME_TYPES)[number];
+
 export const healthResponseSchema = z.object({
   status: z.literal("ok"),
   service: z.string().min(1),
@@ -85,11 +99,30 @@ export type RoomAccessResponse = z.infer<typeof roomAccessResponseSchema>;
 export const chatMessageTextSchema = z
   .string()
   .trim()
-  .min(1, "Message cannot be empty")
   .max(MAX_CHAT_MESSAGE_LENGTH, `Message must be at most ${MAX_CHAT_MESSAGE_LENGTH} characters`)
   .refine((value) => !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value), {
     message: "Message contains invalid characters",
   });
+
+export const chatMediaIdSchema = z
+  .string()
+  .regex(new RegExp(`^[A-Za-z0-9_-]{${MEDIA_ID_LENGTH}}$`), "Invalid media ID");
+
+export const chatMediaSchema = z.object({
+  id: chatMediaIdSchema,
+  mimeType: z.enum(CHAT_IMAGE_MIME_TYPES),
+  sizeBytes: z.number().int().positive(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+
+export type ChatMedia = z.infer<typeof chatMediaSchema>;
+
+export const chatMediaResponseSchema = z.object({
+  media: chatMediaSchema,
+});
+
+export type ChatMediaResponse = z.infer<typeof chatMediaResponseSchema>;
 
 export const chatMessageSchema = z.object({
   id: z.string().min(1),
@@ -97,15 +130,26 @@ export const chatMessageSchema = z.object({
   senderName: displayNameSchema,
   text: chatMessageTextSchema,
   sentAt: z.iso.datetime(),
+  media: chatMediaSchema.optional(),
 });
 
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 
 export const sendChatMessagePayloadSchema = z
   .object({
-    text: chatMessageTextSchema,
+    text: chatMessageTextSchema.optional(),
+    mediaId: chatMediaIdSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((payload, context) => {
+    if (!payload.mediaId && (payload.text ?? "").length === 0) {
+      context.addIssue({
+        code: "custom",
+        message: "A message must contain text, an image, or both",
+        path: ["text"],
+      });
+    }
+  });
 
 export type SendChatMessagePayload = z.infer<typeof sendChatMessagePayloadSchema>;
 
@@ -327,6 +371,11 @@ export const roomErrorCodes = [
   "INVALID_INPUT",
   "UNAUTHORIZED",
   "VIDEO_MISMATCH",
+  "MEDIA_NOT_FOUND",
+  "UNSUPPORTED_MEDIA_TYPE",
+  "MEDIA_TOO_LARGE",
+  "MEDIA_LIMIT_REACHED",
+  "RATE_LIMITED",
   "INTERNAL",
 ] as const;
 

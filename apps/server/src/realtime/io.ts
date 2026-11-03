@@ -7,6 +7,7 @@ import {
   playbackCommandSchema,
   sendChatMessagePayloadSchema,
   socketAuthSchema,
+  type ChatMessage,
   type ChatSendAck,
   type ClientToServerEvents,
   type ClockSyncAck,
@@ -19,6 +20,7 @@ import { Server } from "socket.io";
 
 import { RoomError } from "../domain/errors";
 import type { RoomService } from "../domain/roomService";
+import { consumeSlidingWindow } from "../util/rateLimit";
 
 interface SocketData {
   session?: {
@@ -184,7 +186,7 @@ export function attachRealtime(
       }
 
       if (
-        !consumePlaybackRateLimit(
+        !consumeSlidingWindow(
           recentPlaybackCommandTimes,
           Date.now(),
           playbackRateLimitWindowMs,
@@ -252,7 +254,7 @@ export function attachRealtime(
       }
 
       if (
-        !consumeChatRateLimit(
+        !consumeSlidingWindow(
           recentChatMessageTimes,
           Date.now(),
           chatRateLimitWindowMs,
@@ -263,12 +265,25 @@ export function attachRealtime(
         return;
       }
 
-      const message = roomService.postChatMessage(
-        session.roomId,
-        session.participantId,
-        socket.id,
-        parsed.data.text,
-      );
+      let message: ChatMessage | null;
+
+      try {
+        message = roomService.postChatMessage(
+          session.roomId,
+          session.participantId,
+          socket.id,
+          parsed.data.text ?? "",
+          parsed.data.mediaId,
+        );
+      } catch (error) {
+        respond({
+          ok: false,
+          code: error instanceof RoomError && error.code === "MEDIA_NOT_FOUND"
+            ? "INVALID_INPUT"
+            : "INTERNAL",
+        });
+        return;
+      }
 
       if (!message) {
         respond({ ok: false, code: "UNAUTHORIZED" });
@@ -344,42 +359,6 @@ function toPlaybackErrorCode(error: unknown): PlaybackErrorCode {
   }
 
   return "INTERNAL";
-}
-
-function consumeChatRateLimit(
-  messageTimes: number[],
-  now: number,
-  windowMs: number,
-  maxMessages: number,
-): boolean {
-  while (messageTimes.length > 0 && now - (messageTimes[0] ?? now) >= windowMs) {
-    messageTimes.shift();
-  }
-
-  if (messageTimes.length >= maxMessages) {
-    return false;
-  }
-
-  messageTimes.push(now);
-  return true;
-}
-
-function consumePlaybackRateLimit(
-  commandTimes: number[],
-  now: number,
-  windowMs: number,
-  maxCommands: number,
-): boolean {
-  while (commandTimes.length > 0 && now - (commandTimes[0] ?? now) >= windowMs) {
-    commandTimes.shift();
-  }
-
-  if (commandTimes.length >= maxCommands) {
-    return false;
-  }
-
-  commandTimes.push(now);
-  return true;
 }
 
 function connectError(code: string, message: string): Error {
