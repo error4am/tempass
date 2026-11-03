@@ -27,7 +27,7 @@ function renderPanel(messages: ChatMessage[] = [], onSend = vi.fn()) {
 }
 
 describe("ChatPanel emoji support", () => {
-  it("inserts a picked emoji at the caret and keeps the caret after it", async () => {
+  it("inserts a picked emoji at the caret and keeps the picker open", async () => {
     const { input } = renderPanel();
 
     fireEvent.change(input, { target: { value: "hi there" } });
@@ -42,7 +42,57 @@ describe("ChatPanel emoji support", () => {
     await waitFor(() => {
       expect(input.selectionStart).toBe(5);
     });
+    expect(screen.getByRole("dialog", { name: "Emoji picker" })).not.toBeNull();
+  });
+
+  it("inserts multiple consecutive emojis without reopening the picker", async () => {
+    const { input } = renderPanel();
+
+    fireEvent.change(input, { target: { value: "hi" } });
+    input.setSelectionRange(2, 2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add emoji" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "grinning face" }));
+    await waitFor(() => {
+      expect(input.value).toBe("hi😀");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "grinning face with big eyes" }));
+    await waitFor(() => {
+      expect(input.value).toBe("hi😀😃");
+    });
+
+    expect(screen.getByRole("dialog", { name: "Emoji picker" })).not.toBeNull();
+  });
+
+  it("closes the picker when clicking outside", async () => {
+    renderPanel();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add emoji" }));
+    expect(screen.getByRole("dialog", { name: "Emoji picker" })).not.toBeNull();
+
+    fireEvent.mouseDown(document.body);
+
     expect(screen.queryByRole("dialog", { name: "Emoji picker" })).toBeNull();
+  });
+
+  it("closes on Escape and returns focus to the message input", async () => {
+    const { input } = renderPanel();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add emoji" }));
+    const search = screen.getByLabelText("Search emoji");
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(search);
+    });
+
+    fireEvent.keyDown(search, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Emoji picker" })).toBeNull();
+    });
+    expect(document.activeElement).toBe(input);
   });
 
   it("filters by search and inserts the first match on Enter", async () => {

@@ -288,14 +288,15 @@ export function ChatPanel({
   }
 
   function handleEmojiSelect(char: string) {
-    const start = inputRef.current?.selectionStart ?? draft.length;
-    const end = inputRef.current?.selectionEnd ?? start;
+    const input = inputRef.current;
+    const start = input?.selectionStart ?? draft.length;
+    const end = input?.selectionEnd ?? start;
     const next = `${draft.slice(0, start)}${char}${draft.slice(end)}`;
 
     setDraft(next);
     setError(null);
     setPendingCaret(start + char.length);
-    closeEmoji();
+    input?.focus({ preventScroll: true });
   }
 
   async function submitMessage() {
