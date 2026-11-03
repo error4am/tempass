@@ -135,6 +135,53 @@ describe("room chat over Socket.IO", () => {
     expect(received.some((message) => message.text === "I am definitely Mallory")).toBe(false);
   });
 
+  it("round-trips emoji text and applies the limit to grapheme clusters", async () => {
+    const test = await setup();
+    const { first, second } = await createRoomWithTwoParticipants(test);
+    const emoji = "😀";
+    const family = "👨‍👩‍👧‍👦";
+
+    const emojiDelivery = waitForChatMessage(
+      second.socket,
+      (message) => message.text === "hi 👋🏽 from the chat",
+    );
+    const emojiAck = await sendChatMessage(first.socket, { text: "hi 👋🏽 from the chat" });
+    expectAccepted(emojiAck);
+    expect(emojiAck.message.text).toBe("hi 👋🏽 from the chat");
+    await emojiDelivery;
+
+    const maxDelivery = waitForChatMessage(
+      second.socket,
+      (message) => message.text === emoji.repeat(MAX_CHAT_MESSAGE_LENGTH),
+    );
+    const maxAck = await sendChatMessage(first.socket, {
+      text: emoji.repeat(MAX_CHAT_MESSAGE_LENGTH),
+    });
+    expectAccepted(maxAck);
+    await maxDelivery;
+
+    const familyDelivery = waitForChatMessage(
+      second.socket,
+      (message) => message.text === family.repeat(MAX_CHAT_MESSAGE_LENGTH),
+    );
+    const familyAck = await sendChatMessage(first.socket, {
+      text: family.repeat(MAX_CHAT_MESSAGE_LENGTH),
+    });
+    expectAccepted(familyAck);
+    await familyDelivery;
+
+    const received: ChatMessage[] = [];
+    second.socket.on("chat:message", (message) => received.push(message));
+
+    const overlongAck = await sendChatMessage(first.socket, {
+      text: emoji.repeat(MAX_CHAT_MESSAGE_LENGTH + 1),
+    });
+    expect(overlongAck).toEqual({ ok: false, code: "INVALID_INPUT" });
+
+    await delay(100);
+    expect(received).toHaveLength(0);
+  });
+
   it("delivers messages only to participants in the same room", async () => {
     const test = await setup();
     const { first, second } = await createRoomWithTwoParticipants(test);

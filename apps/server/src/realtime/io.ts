@@ -278,9 +278,11 @@ export function attachRealtime(
       } catch (error) {
         respond({
           ok: false,
-          code: error instanceof RoomError && error.code === "MEDIA_NOT_FOUND"
-            ? "INVALID_INPUT"
-            : "INTERNAL",
+          code:
+            error instanceof RoomError &&
+            (error.code === "MEDIA_NOT_FOUND" || error.code === "INVALID_INPUT")
+              ? "INVALID_INPUT"
+              : "INTERNAL",
         });
         return;
       }

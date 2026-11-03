@@ -3,6 +3,7 @@ import {
   GLOBAL_MEDIA_MAX_BYTES,
   MAX_CHAT_IMAGE_BYTES,
   ROOM_MEDIA_MAX_BYTES,
+  chatMessageTextSchema,
   playbackUpdateCommandSchema,
   youtubeVideoIdSchema,
   type ChatMedia,
@@ -286,6 +287,12 @@ export class RoomService {
       return null;
     }
 
+    const parsedText = chatMessageTextSchema.safeParse(text);
+
+    if (!parsedText.success) {
+      throw new RoomError("INVALID_INPUT", "Invalid chat message");
+    }
+
     const { room, participant } = current;
     let media: ChatMedia | undefined;
 
@@ -309,7 +316,7 @@ export class RoomService {
       id: createMessageId(),
       senderId: participant.id,
       senderName: participant.displayName,
-      text,
+      text: parsedText.data,
       sentAt: new Date(this.now()).toISOString(),
       ...(media ? { media } : {}),
     };

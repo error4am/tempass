@@ -96,10 +96,33 @@ export const roomAccessResponseSchema = z.object({
 
 export type RoomAccessResponse = z.infer<typeof roomAccessResponseSchema>;
 
+const graphemeSegmenter =
+  typeof Intl !== "undefined" && typeof Intl.Segmenter === "function"
+    ? new Intl.Segmenter("en", { granularity: "grapheme" })
+    : null;
+
+/**
+ * Splits text into user-perceived characters. Falls back to code points when
+ * Intl.Segmenter is unavailable.
+ */
+export function splitChatGraphemes(value: string): string[] {
+  if (graphemeSegmenter) {
+    return Array.from(graphemeSegmenter.segment(value), (segment) => segment.segment);
+  }
+
+  return Array.from(value);
+}
+
+export function countChatGraphemes(value: string): number {
+  return splitChatGraphemes(value).length;
+}
+
 export const chatMessageTextSchema = z
   .string()
   .trim()
-  .max(MAX_CHAT_MESSAGE_LENGTH, `Message must be at most ${MAX_CHAT_MESSAGE_LENGTH} characters`)
+  .refine((value) => countChatGraphemes(value) <= MAX_CHAT_MESSAGE_LENGTH, {
+    message: `Message must be at most ${MAX_CHAT_MESSAGE_LENGTH} characters`,
+  })
   .refine((value) => !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value), {
     message: "Message contains invalid characters",
   });

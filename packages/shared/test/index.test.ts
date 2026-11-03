@@ -6,8 +6,10 @@ import {
   MAX_CHAT_MESSAGE_LENGTH,
   MAX_PLAYBACK_POSITION_SECONDS,
   chatMessageSchema,
+  chatMessageTextSchema,
   chatSendAckSchema,
   clockSyncAckSchema,
+  countChatGraphemes,
   clockSyncRequestSchema,
   healthResponseSchema,
   playbackCommandAckSchema,
@@ -16,6 +18,7 @@ import {
   playbackUpdateCommandSchema,
   playbackUpdateSchema,
   sendChatMessagePayloadSchema,
+  splitChatGraphemes,
   youtubeVideoIdSchema,
 } from "../src/index";
 
@@ -60,6 +63,35 @@ describe("chat contracts", () => {
         text: "x".repeat(MAX_CHAT_MESSAGE_LENGTH + 1),
       }).success,
     ).toBe(false);
+  });
+
+  it("counts grapheme clusters instead of UTF-16 code units", () => {
+    expect(countChatGraphemes("hello")).toBe(5);
+    expect(countChatGraphemes("😀")).toBe(1);
+    expect(countChatGraphemes("👨‍👩‍👧‍👦")).toBe(1);
+    expect(countChatGraphemes("🇩🇪")).toBe(1);
+    expect(countChatGraphemes("1️⃣")).toBe(1);
+    expect(splitChatGraphemes("a😀")).toEqual(["a", "😀"]);
+  });
+
+  it("applies the message limit to grapheme clusters", () => {
+    const emoji = "😀";
+    const family = "👨‍👩‍👧‍👦";
+
+    expect(
+      chatMessageTextSchema.safeParse(emoji.repeat(MAX_CHAT_MESSAGE_LENGTH)).success,
+    ).toBe(true);
+    expect(
+      chatMessageTextSchema.safeParse(emoji.repeat(MAX_CHAT_MESSAGE_LENGTH + 1)).success,
+    ).toBe(false);
+    expect(
+      chatMessageTextSchema.safeParse(family.repeat(MAX_CHAT_MESSAGE_LENGTH)).success,
+    ).toBe(true);
+    expect(
+      sendChatMessagePayloadSchema.safeParse({
+        text: family.repeat(MAX_CHAT_MESSAGE_LENGTH),
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects empty, whitespace-only, malformed, and extra-field payloads", () => {

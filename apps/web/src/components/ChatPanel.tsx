@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -11,12 +12,15 @@ import {
   CHAT_IMAGE_MIME_TYPES,
   MAX_CHAT_IMAGE_BYTES,
   MAX_CHAT_MESSAGE_LENGTH,
+  countChatGraphemes,
   type ChatMedia,
   type ChatMessage,
   type ChatSendAck,
 } from "@tempass/shared";
 
+import { isEmojiOnlyMessage } from "../lib/emoji";
 import { chatErrorMessage, mediaErrorMessage } from "../lib/roomErrors";
+import { EmojiPicker } from "./EmojiPicker";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -74,7 +78,11 @@ export function ChatPanel({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [viewer, setViewer] = useState<ViewerImage | null>(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [pendingCaret, setPendingCaret] = useState<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
+  const emojiPickerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
   const restoreFocus = useRef(false);
@@ -94,6 +102,21 @@ export function ChatPanel({
       container.scrollTop = container.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (pendingCaret === null) {
+      return;
+    }
+
+    const input = inputRef.current;
+
+    if (input) {
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(pendingCaret, pendingCaret);
+    }
+
+    setPendingCaret(null);
+  }, [pendingCaret]);
 
   useEffect(() => {
     if (sending || !restoreFocus.current) {
@@ -245,6 +268,36 @@ export function ChatPanel({
     }
   }
 
+  function closeEmoji() {
+    const focusInPicker = emojiPickerRef.current?.contains(document.activeElement) === true;
+    setEmojiOpen(false);
+
+    if (focusInPicker) {
+      inputRef.current?.focus({ preventScroll: true });
+    }
+  }
+
+  function toggleEmoji() {
+    if (emojiOpen) {
+      setEmojiOpen(false);
+      inputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+
+    setEmojiOpen(true);
+  }
+
+  function handleEmojiSelect(char: string) {
+    const start = inputRef.current?.selectionStart ?? draft.length;
+    const end = inputRef.current?.selectionEnd ?? start;
+    const next = `${draft.slice(0, start)}${char}${draft.slice(end)}`;
+
+    setDraft(next);
+    setError(null);
+    setPendingCaret(start + char.length);
+    closeEmoji();
+  }
+
   async function submitMessage() {
     if (sending || !connected) {
       return;
@@ -262,7 +315,7 @@ export function ChatPanel({
       return;
     }
 
-    if (text.length > MAX_CHAT_MESSAGE_LENGTH) {
+    if (countChatGraphemes(text) > MAX_CHAT_MESSAGE_LENGTH) {
       setError(`Messages must be at most ${MAX_CHAT_MESSAGE_LENGTH} characters.`);
       return;
     }
@@ -294,6 +347,12 @@ export function ChatPanel({
   }
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Escape" && emojiOpen) {
+      event.preventDefault();
+      closeEmoji();
+      return;
+    }
+
     if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
       return;
     }
@@ -305,6 +364,8 @@ export function ChatPanel({
   const sendDisabled =
     !connected || sending || uploading || (draft.trim().length === 0 && !uploadedMedia);
   const attachDisabled = !connected || sending || uploading;
+  const emojiDisabled = !connected || sending;
+  const graphemeCount = useMemo(() => countChatGraphemes(draft), [draft]);
 
   return (
     <section
@@ -376,7 +437,13 @@ export function ChatPanel({
                     />
                   ) : null}
                   {message.text ? (
-                    <p className="mt-1 min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-6 text-slate-300">
+                    <p
+                      className={`mt-1 min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-slate-300 ${
+                        isEmojiOnlyMessage(message.text)
+                          ? "text-3xl leading-9"
+                          : "text-sm leading-6"
+                      }`}
+                    >
                       {message.text}
                     </p>
                   ) : null}
@@ -401,7 +468,6 @@ export function ChatPanel({
           }}
           onKeyDown={handleKeyDown}
           rows={2}
-          maxLength={MAX_CHAT_MESSAGE_LENGTH}
           placeholder={connected ? "Write a message…" : "Reconnect to send messages"}
           disabled={!connected || sending}
           className="block w-full min-w-0 resize-none rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-rose-400/60 focus:outline-none focus:ring-2 focus:ring-rose-400/20 disabled:cursor-not-allowed disabled:opacity-60"
@@ -455,6 +521,32 @@ export function ChatPanel({
 
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
+            <div className="relative shrink-0">
+              <button
+                ref={emojiButtonRef}
+                type="button"
+                onClick={toggleEmoji}
+                aria-label="Add emoji"
+                aria-expanded={emojiOpen}
+                aria-haspopup="dialog"
+                disabled={emojiDisabled}
+                className="h-9 shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Emoji
+              </button>
+              {emojiOpen ? (
+                <div
+                  ref={emojiPickerRef}
+                  className="absolute bottom-full left-0 z-20 mb-2"
+                >
+                  <EmojiPicker
+                    onSelect={handleEmojiSelect}
+                    onClose={closeEmoji}
+                    excludeRef={emojiButtonRef}
+                  />
+                </div>
+              ) : null}
+            </div>
             {onUploadImage ? (
               <>
                 <input
@@ -480,7 +572,7 @@ export function ChatPanel({
               </>
             ) : null}
             <span className="min-w-0 truncate text-[11px] text-slate-500">
-              {draft.length}/{MAX_CHAT_MESSAGE_LENGTH} · Enter sends, Shift+Enter adds a line
+              {graphemeCount}/{MAX_CHAT_MESSAGE_LENGTH} · Enter sends, Shift+Enter adds a line
             </span>
           </div>
           <button
