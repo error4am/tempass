@@ -86,7 +86,7 @@ export function Home() {
     <Shell>
       <div className="max-w-2xl">
         <span className="inline-flex items-center rounded-full border border-rose-400/30 bg-rose-400/10 px-3 py-1 text-xs font-medium text-rose-200">
-          Two people · One screen · In sync
+          Private room · Two people · Live chat
         </span>
 
         <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">
