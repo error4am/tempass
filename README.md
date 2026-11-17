@@ -1,12 +1,19 @@
 # Tempass
 
-Tempass is a private, YouTube-only watch-party web application for two people. One creates a
-room, shares an invitation link, and both participants meet in the same room.
+Tempass is a private watch-party web application for two people. One creates a room, shares an
+invitation link, and both participants meet in the same room with synchronized playback and chat.
+
+Two playback modes:
+
+- **YouTube mode** — paste a link, and the embedded player is driven by the room. Both
+  participants have equal controls, and clock-synchronised drift correction keeps them aligned.
+- **Companion mode** — for sites that refuse framing (`X-Frame-Options: DENY`,
+  `frame-ancestors 'none'`). The presenter runs the companion script in the tab that is
+  actually playing the video; it reports the media state to the room and applies play / pause /
+  seek commands for everyone. Nothing is proxied or re-hosted.
 
 The current stage implements **rooms, optional passwords, sessions, live participant presence,
-real-time chat, and a single-instance test deployment configuration**. Video selection and
-synchronized playback are not implemented yet, and both participants will eventually have equal
-playback controls.
+real-time chat, synchronized YouTube playback, and the source-site companion bridge**.
 
 ## Requirements
 
@@ -171,6 +178,6 @@ participant IDs are random server-generated identifiers; clients cannot choose o
   editing, or deletion.
 - There is no server-side idempotency key or duplicate-message merge; the client prevents repeated
   submits while a send is pending. Message IDs are unique per accepted message.
-- A video queue, playback synchronization, and reconnection resync of playback are not implemented
+- A video queue and reconnection resync of playback are not implemented yet. implemented
   yet.
 - Both participants will eventually have equal playback controls. No host-only model.

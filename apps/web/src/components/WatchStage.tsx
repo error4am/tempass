@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import type {
+  BridgeCommand,
+  BridgeState,
   PlaybackCommand,
   PlaybackCommandAck,
   PlaybackUpdate,
@@ -8,10 +10,13 @@ import type {
 
 import { playbackErrorMessage } from "../lib/roomErrors";
 import { parseYouTubeVideoId } from "../lib/youtube";
+import { ExternalStage } from "./ExternalStage";
 import { YouTubePlayer } from "./YouTubePlayer";
 
 interface WatchStageProps {
   playback: PlaybackUpdate | null;
+  bridge?: BridgeState | null;
+  onBridgeCommand?: (command: BridgeCommand) => void;
   connected: boolean;
   clockOffsetMs?: number | null;
   onCommand: (command: PlaybackCommand) => Promise<PlaybackCommandAck>;
@@ -25,6 +30,8 @@ const PLAYBACK_STATUS_LABELS = {
 
 export function WatchStage({
   playback,
+  bridge = null,
+  onBridgeCommand,
   connected,
   clockOffsetMs = null,
   onCommand,
@@ -103,11 +110,19 @@ export function WatchStage({
           Watch together
         </h2>
         <span className="text-xs text-slate-500">
-          {PLAYBACK_STATUS_LABELS[playbackStatus]}
+          {bridge ? (bridge.status === "playing" ? "Playing" : "Paused") : PLAYBACK_STATUS_LABELS[playbackStatus]}
         </span>
       </div>
 
-      <form className="mt-3 flex min-w-0 flex-col gap-2 sm:flex-row" onSubmit={handleSelectVideo}>
+      {bridge && onBridgeCommand ? (
+        <ExternalStage
+          bridge={bridge}
+          connected={connected}
+          onCommand={onBridgeCommand}
+        />
+      ) : (
+        <>
+          <form className="mt-3 flex min-w-0 flex-col gap-2 sm:flex-row" onSubmit={handleSelectVideo}>
         <label htmlFor="video-input" className="sr-only">
           YouTube link or video ID
         </label>
@@ -156,6 +171,8 @@ export function WatchStage({
             </p>
           </div>
         </div>
+      )}
+        </>
       )}
     </section>
   );

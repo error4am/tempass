@@ -2,11 +2,14 @@ import type { Server as HttpServer } from "node:http";
 
 import {
   SOCKET_EVENTS,
+  bridgeCommandSchema,
+  bridgeStateReportSchema,
   clockSyncRequestSchema,
   leaveRoomPayloadSchema,
   playbackCommandSchema,
   sendChatMessagePayloadSchema,
   socketAuthSchema,
+  type BridgeState,
   type ChatMessage,
   type ChatSendAck,
   type ClientToServerEvents,
@@ -16,7 +19,7 @@ import {
   type PlaybackUpdate,
   type ServerToClientEvents,
 } from "@tempass/shared";
-import { Server } from "socket.io";
+import { Server, type Socket } from "socket.io";
 
 import { RoomError } from "../domain/errors";
 import type { RoomService } from "../domain/roomService";
@@ -27,6 +30,8 @@ interface SocketData {
     roomId: string;
     participantId: string;
   };
+  /** "bridge" sockets own the source site's <video> and never count as presence. */
+  role?: "participant" | "bridge";
   left?: boolean;
 }
 
@@ -60,7 +65,10 @@ export function attachRealtime(
 ): TempassSocketServer {
   const io: TempassSocketServer = new Server(httpServer, {
     cors: {
-      origin: options.corsOrigin,
+      // Participants connect from the Tempass web origin, but the companion
+      // script connects from whatever site is playing the video (and that can
+      // be any domain). Authorization is the room token, never the origin.
+      origin: true,
     },
     maxHttpBufferSize: 16 * 1024,
   });
@@ -74,6 +82,9 @@ export function attachRealtime(
     options.playbackRateLimitWindowMs ?? DEFAULT_PLAYBACK_RATE_LIMIT_WINDOW_MS;
   const playbackRateLimitMaxCommands =
     options.playbackRateLimitMaxCommands ?? DEFAULT_PLAYBACK_RATE_LIMIT_MAX_COMMANDS;
+
+  /** Latest reported state per room from the companion running on the source site. */
+  const bridges = new Map<string, BridgeState>();
 
   io.use((socket, next) => {
     const auth = socketAuthSchema.safeParse(socket.handshake.auth);
@@ -91,6 +102,7 @@ export function attachRealtime(
     }
 
     socket.data.session = session;
+    socket.data.role = auth.data.role ?? "participant";
     next();
   });
 
@@ -99,6 +111,11 @@ export function attachRealtime(
 
     if (!session) {
       socket.disconnect(true);
+      return;
+    }
+
+    if (socket.data.role === "bridge") {
+      attachBridge(socket, session, io, bridges, roomService);
       return;
     }
 
@@ -228,6 +245,33 @@ export function attachRealtime(
       } catch (error) {
         respond({ ok: false, code: toPlaybackErrorCode(error) });
       }
+    });
+
+    socket.on(SOCKET_EVENTS.BRIDGE_COMMAND, (payload, ack) => {
+      const respond = (response: { ok: boolean }) => {
+        ack?.(response);
+      };
+
+      const parsed = bridgeCommandSchema.safeParse(payload);
+
+      if (!parsed.success) {
+        respond({ ok: false });
+        return;
+      }
+
+      if (
+        !roomService.isCurrentSocket(
+          session.roomId,
+          session.participantId,
+          socket.id,
+        )
+      ) {
+        respond({ ok: false });
+        return;
+      }
+
+      io.to(session.roomId).emit(SOCKET_EVENTS.BRIDGE_COMMAND, parsed.data);
+      respond({ ok: true });
     });
 
     socket.on(SOCKET_EVENTS.CHAT_MESSAGE, (payload, ack) => {
@@ -362,6 +406,59 @@ function toPlaybackErrorCode(error: unknown): PlaybackErrorCode {
 
   return "INTERNAL";
 }
+
+/**
+ * A bridge socket is the companion script running on the source website.
+ * It owns the <video> element, reports its state, and applies commands.
+ * It never counts as presence and never receives a room snapshot.
+ */
+function attachBridge(
+  socket: Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>,
+  session: { roomId: string; participantId: string },
+  io: TempassSocketServer,
+  bridges: Map<string, BridgeState>,
+  roomService: RoomService,
+): void {
+  const roomId = session.roomId;
+
+  socket.join(roomId);
+
+  const existing = bridges.get(roomId);
+
+  if (existing) {
+    socket.emit(SOCKET_EVENTS.BRIDGE_STATE, existing);
+  }
+
+  socket.on(SOCKET_EVENTS.BRIDGE_STATE, (payload, ack) => {
+    const parsed = bridgeStateReportSchema.safeParse(payload);
+
+    if (!parsed.success) {
+      ack?.({ ok: false, code: "INVALID_INPUT" });
+      return;
+    }
+
+    const previous = bridges.get(roomId);
+    const state: BridgeState = {
+      ...parsed.data,
+      updatedAt: roomService.getServerTime(),
+      revision: (previous?.revision ?? 0) + 1,
+    };
+
+    bridges.set(roomId, state);
+    io.to(roomId).emit(SOCKET_EVENTS.BRIDGE_STATE, state);
+    ack?.({ ok: true, state });
+  });
+
+  socket.on("disconnect", () => {
+    if (!bridges.has(roomId)) {
+      return;
+    }
+
+    bridges.delete(roomId);
+    io.to(roomId).emit(SOCKET_EVENTS.BRIDGE_STATE, null);
+  });
+}
+
 
 function connectError(code: string, message: string): Error {
   const error = new Error(message) as Error & { data?: { code: string } };

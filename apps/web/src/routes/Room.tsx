@@ -12,6 +12,7 @@ import {
 } from "@tempass/shared";
 
 import { ChatPanel } from "../components/ChatPanel";
+import { CompanionCard } from "../components/CompanionCard";
 import { Shell } from "../components/Shell";
 import { WatchStage } from "../components/WatchStage";
 import { createChatMediaLoader, uploadChatImage } from "../lib/media";
@@ -20,6 +21,7 @@ import { navigate } from "../lib/router";
 import { clearSession, type RoomSession } from "../lib/session";
 import { sendPlaybackCommand } from "../realtime/playback";
 import { connectRoomSocket, type RoomSocket } from "../realtime/socket";
+import { useRoomBridge } from "../realtime/useRoomBridge";
 import { useRoomPlayback } from "../realtime/useRoomPlayback";
 import { useServerClock } from "../realtime/useServerClock";
 
@@ -55,6 +57,7 @@ export function Room({ roomId, session }: RoomProps) {
   const [socket, setSocket] = useState<RoomSocket | null>(null);
   const socketRef = useRef<RoomSocket | null>(null);
   const { playback, applyUpdate } = useRoomPlayback(roomId, socket, snapshot);
+  const { bridge, sendCommand: sendBridgeCommand } = useRoomBridge(roomId, socket);
   const serverClock = useServerClock(roomId, socket);
 
   const mediaLoader = useMemo(
@@ -302,9 +305,13 @@ export function Room({ roomId, session }: RoomProps) {
           </section>
         ) : null}
 
+        <CompanionCard roomId={roomId} token={session.token} />
+
         <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)]">
           <WatchStage
             playback={playback}
+            bridge={bridge}
+            onBridgeCommand={sendBridgeCommand}
             connected={status === "connected"}
             clockOffsetMs={serverClock.offsetMs}
             onCommand={handlePlaybackCommand}

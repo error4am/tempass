@@ -352,6 +352,86 @@ export const playbackCommandAckSchema = z.discriminatedUnion("ok", [
 
 export type PlaybackCommandAck = z.infer<typeof playbackCommandAckSchema>;
 
+/**
+ * Source-companion ("bridge") protocol.
+ *
+ * Some sites cannot be embedded and refuse framing, but a real user can still
+ * play them in their own tab. The companion script — running on that tab —
+ * owns the <video> element and reports its state to the room, while the room
+ * sends play/pause/seek commands back to it.
+ */
+export const bridgeSourceSchema = z
+  .object({
+    url: z.string().url().max(2048),
+    title: z.string().max(200).optional(),
+  })
+  .strict();
+
+export const bridgeStateSchema = z
+  .object({
+    source: bridgeSourceSchema,
+    status: z.enum(["playing", "paused"]),
+    positionSeconds: playbackPositionSchema,
+    durationSeconds: playbackPositionSchema,
+    updatedAt: z.number().int().nonnegative(),
+    revision: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type BridgeState = z.infer<typeof bridgeStateSchema>;
+
+/** What the companion reports; the server owns `updatedAt` and `revision`. */
+export const bridgeStateReportSchema = z
+  .object({
+    source: bridgeSourceSchema,
+    status: z.enum(["playing", "paused"]),
+    positionSeconds: playbackPositionSchema,
+    durationSeconds: playbackPositionSchema,
+  })
+  .strict();
+
+export type BridgeStateReport = z.infer<typeof bridgeStateReportSchema>;
+
+export const bridgeCommandSchema = z.discriminatedUnion("action", [
+  z
+    .object({
+      action: z.literal("play"),
+      positionSeconds: playbackPositionSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("pause"),
+      positionSeconds: playbackPositionSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("seek"),
+      positionSeconds: playbackPositionSchema,
+    })
+    .strict(),
+]);
+
+export type BridgeCommand = z.infer<typeof bridgeCommandSchema>;
+
+export const bridgeStateAckSchema = z.discriminatedUnion("ok", [
+  z
+    .object({
+      ok: z.literal(true),
+      state: bridgeStateSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ok: z.literal(false),
+      code: z.enum(playbackErrorCodes),
+    })
+    .strict(),
+]);
+
+export type BridgeStateAck = z.infer<typeof bridgeStateAckSchema>;
+
 export const roomSnapshotSchema = z.object({
   room: publicRoomSchema,
   self: publicParticipantSchema,
@@ -373,6 +453,12 @@ export type PresenceUpdate = z.infer<typeof presenceUpdateSchema>;
 export const socketAuthSchema = z
   .object({
     token: z.string().min(20).max(200),
+    /**
+     * "participant" (default) is a person watching in the Tempass room.
+     * "bridge" is the companion script running on the source website: it owns
+     * the <video> element and is the only client allowed to report media state.
+     */
+    role: z.enum(["participant", "bridge"]).optional(),
   })
   .strict();
 
@@ -419,6 +505,8 @@ export const SOCKET_EVENTS = {
   PLAYBACK_COMMAND: "playback:command",
   PLAYBACK_STATE: "playback:state",
   CLOCK_SYNC: "clock:sync",
+  BRIDGE_STATE: "bridge:state",
+  BRIDGE_COMMAND: "bridge:command",
 } as const;
 
 export interface ClientToServerEvents {
@@ -429,6 +517,8 @@ export interface ClientToServerEvents {
     ack?: (response: PlaybackCommandAck) => void,
   ) => void;
   "clock:sync": (payload: unknown, ack?: (response: ClockSyncAck) => void) => void;
+  "bridge:state": (payload: unknown, ack?: (response: BridgeStateAck) => void) => void;
+  "bridge:command": (payload: unknown, ack?: (response: { ok: boolean }) => void) => void;
 }
 
 export interface ServerToClientEvents {
@@ -436,6 +526,8 @@ export interface ServerToClientEvents {
   "presence:update": (update: PresenceUpdate) => void;
   "chat:message": (message: ChatMessage) => void;
   "playback:state": (update: PlaybackUpdate) => void;
+  "bridge:state": (state: BridgeState | null) => void;
+  "bridge:command": (command: BridgeCommand) => void;
 }
 
 export function roomInvitePath(roomId: string): string {
