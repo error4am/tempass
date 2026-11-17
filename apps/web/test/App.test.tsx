@@ -22,7 +22,7 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.getByText("Tempass")).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 1, name: /watch youtube together/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: /watch together/i })).toBeTruthy();
     expect(screen.getByText(/private watch-party app/i)).toBeTruthy();
   });
 

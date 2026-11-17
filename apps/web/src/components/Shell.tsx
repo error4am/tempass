@@ -36,15 +36,16 @@ export function Shell({ children, wide = false }: ShellProps) {
           </button>
 
           <span className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-400 sm:inline">
-            YouTube only · Two people
+            Two people · One screen
           </span>
         </header>
 
         <main className="flex flex-1 flex-col py-10">{children}</main>
 
         <footer className="border-t border-white/5 pt-5 text-xs leading-5 text-slate-500">
-          Designed for YouTube. Only videos that allow embedding can be watched. Tempass does not
-          bypass advertisements, DRM, sign-in requirements, or regional restrictions.
+          YouTube videos must allow embedding. For sites that cannot be embedded, the presenter
+          shares their own tab. Tempass does not bypass advertisements, DRM, sign-in requirements,
+          or regional restrictions.
         </footer>
       </div>
     </div>

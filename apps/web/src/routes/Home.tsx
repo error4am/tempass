@@ -86,17 +86,17 @@ export function Home() {
     <Shell>
       <div className="max-w-2xl">
         <span className="inline-flex items-center rounded-full border border-rose-400/30 bg-rose-400/10 px-3 py-1 text-xs font-medium text-rose-200">
-          YouTube only · Two people · One shared screen
+          Two people · One screen · In sync
         </span>
 
         <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">
-          Watch YouTube together, <span className="text-rose-400">in sync.</span>
+          Watch together, <span className="text-rose-400">in sync.</span>
         </h1>
 
         <p className="mt-5 max-w-xl text-base leading-7 text-slate-400">
-          Tempass is a private watch-party app for two people. Create a room, share the invitation
-          link, and chat with the other participant while synchronized YouTube playback arrives in
-          a later milestone.
+          Tempass is a private watch-party app for two people. Paste a YouTube link and the
+          embedded player stays in sync for both of you. For sites that block embedding, the
+          presenter shares their tab and it plays inside the room instead.
         </p>
       </div>
 
