@@ -415,19 +415,34 @@
 
     setStatus("Pick this tab, then share…");
 
+    // "preferCurrentTab" preselects this tab, so "selfBrowserSurface" must
+    // INCLUDE it — excluding it makes Chrome reject the request immediately.
+    var wanted = {
+      video: { displaySurface: "browser" },
+      audio: true,
+      preferCurrentTab: true,
+      selfBrowserSurface: "include",
+      surfaceSwitching: "include",
+    };
+
     navigator.mediaDevices
-      .getDisplayMedia({
-        video: { displaySurface: "browser" },
-        audio: true,
-        preferCurrentTab: true,
-        selfBrowserSurface: "exclude",
-        surfaceSwitching: "include",
-      })
+      .getDisplayMedia(wanted)
       .then(function (stream) {
         beginSharing(stream);
       })
-      .catch(function () {
-        setStatus("Tab capture was cancelled", "error");
+      .catch(function (firstError) {
+        // Older browsers reject unknown constraints; retry with the basics.
+        return navigator.mediaDevices
+          .getDisplayMedia({ video: true, audio: true })
+          .then(function (stream) {
+            beginSharing(stream);
+          })
+          .catch(function (secondError) {
+            var error = secondError || firstError || {};
+            var name = error.name || "Error";
+            var message = error.message ? " — " + error.message : "";
+            setStatus("Tab capture failed: " + name + message, "error");
+          });
       });
   }
 

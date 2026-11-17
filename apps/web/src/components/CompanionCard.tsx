@@ -12,9 +12,11 @@ function buildBookmarklet(roomId: string, token: string, server: string): string
     roomId,
   )}&token=${encodeURIComponent(token)}&server=${encodeURIComponent(server)}`;
 
+  // The bookmarklet appends a cache-buster at run time, so a redeployed
+  // companion is picked up without re-installing the bookmark.
   return `javascript:(()=>{const s=document.createElement('script');s.src=${JSON.stringify(
     scriptUrl,
-  )};document.body.appendChild(s)})()`;
+  )}+"&cb="+Date.now();document.body.appendChild(s)})()`;
 }
 
 /**
