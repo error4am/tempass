@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { API_BASE_URL } from "../lib/config";
 
@@ -18,14 +18,49 @@ function buildBookmarklet(roomId: string, token: string, server: string): string
 }
 
 /**
- * Entry point for "companion mode": the source site plays in the presenter's own
- * tab, and this script turns that tab into the room's remote-controlled screen.
+ * React refuses to render `javascript:` URLs (it rewrites them to a throwing
+ * stub), so the draggable bookmarklet is created imperatively in an effect.
  */
+function useBookmarkletAnchor(bookmarklet: string) {
+  const containerRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    container.replaceChildren();
+
+    const anchor = document.createElement("a");
+    anchor.href = bookmarklet;
+    anchor.textContent = "Tempass companion";
+    anchor.draggable = true;
+    anchor.className =
+      "inline-flex h-9 cursor-grab items-center rounded-lg bg-rose-500 px-4 text-xs font-semibold text-white transition hover:bg-rose-400";
+    anchor.addEventListener("click", (event) => {
+      // Clicking would navigate; the point is to drag it to the bookmarks bar.
+      event.preventDefault();
+      void navigator.clipboard?.writeText(bookmarklet).catch(() => {});
+    });
+
+    container.appendChild(anchor);
+
+    return () => {
+      container.replaceChildren();
+    };
+  }, [bookmarklet]);
+
+  return containerRef;
+}
+
 export function CompanionCard({ roomId, token }: CompanionCardProps) {
   const [copied, setCopied] = useState(false);
 
   const server = API_BASE_URL || window.location.origin;
   const bookmarklet = buildBookmarklet(roomId, token, server);
+  const anchorRef = useBookmarkletAnchor(bookmarklet);
 
   async function handleCopy() {
     try {
@@ -52,22 +87,19 @@ export function CompanionCard({ roomId, token }: CompanionCardProps) {
 
       <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-slate-400">
         <li>Open the episode on the source site and press play.</li>
-        <li>Drag the button below to your bookmarks bar.</li>
         <li>
-          With the video tab active, click the bookmark once. A badge appears when
-          it is connected.
+          Drag the pink button below to your bookmarks bar. (Clicking it only
+          copies the code — it needs to be dragged.)
+        </li>
+        <li>
+          With the video tab active, click that bookmark once. A badge appears in
+          the corner when it is connected.
         </li>
         <li>This room switches to the source stage automatically.</li>
       </ol>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <a
-          href={bookmarklet}
-          onClick={(event) => event.preventDefault()}
-          className="inline-flex h-9 items-center rounded-lg bg-rose-500 px-4 text-xs font-semibold text-white transition hover:bg-rose-400"
-        >
-          Tempass companion
-        </a>
+        <span ref={anchorRef} />
         <button
           type="button"
           onClick={handleCopy}
@@ -79,8 +111,12 @@ export function CompanionCard({ roomId, token }: CompanionCardProps) {
 
       <details className="mt-3">
         <summary className="cursor-pointer text-xs text-slate-500">
-          Prefer the address bar?
+          No bookmarks bar? Use the address bar
         </summary>
+        <p className="mt-2 text-xs text-slate-500">
+          Paste the code below, then delete the leading <code>javascript:</code>{" "}
+          and retype it by hand — Chrome strips it when pasted.
+        </p>
         <pre className="mt-2 overflow-x-auto rounded-lg border border-white/5 bg-slate-950/60 p-3 text-[11px] leading-relaxed text-slate-400">
           {bookmarklet}
         </pre>
