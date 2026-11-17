@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import type {
   BridgeCommand,
@@ -18,6 +18,8 @@ interface WatchStageProps {
   bridge?: BridgeState | null;
   stream?: MediaStream | null;
   onBridgeCommand?: (command: BridgeCommand) => void;
+  /** Extra content shown under the "Share a tab" panel, e.g. setup steps. */
+  companionSlot?: ReactNode;
   connected: boolean;
   clockOffsetMs?: number | null;
   onCommand: (command: PlaybackCommand) => Promise<PlaybackCommandAck>;
@@ -34,6 +36,7 @@ export function WatchStage({
   bridge = null,
   stream = null,
   onBridgeCommand,
+  companionSlot = null,
   connected,
   clockOffsetMs = null,
   onCommand,
@@ -41,7 +44,20 @@ export function WatchStage({
   const [videoInput, setVideoInput] = useState("");
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
+  const [tab, setTab] = useState<"youtube" | "external">("youtube");
   const mountedRef = useRef(true);
+  const hadBridgeRef = useRef(false);
+
+  // Jump to the source panel the first time a companion connects, but never
+  // yank the user back if they switch tabs themselves.
+  useEffect(() => {
+    if (bridge && !hadBridgeRef.current) {
+      hadBridgeRef.current = true;
+      setTab("external");
+    } else if (!bridge) {
+      hadBridgeRef.current = false;
+    }
+  }, [bridge]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -116,14 +132,34 @@ export function WatchStage({
         </span>
       </div>
 
-      {bridge && onBridgeCommand ? (
-        <ExternalStage
-          bridge={bridge}
-          stream={stream}
-          connected={connected}
-          onCommand={onBridgeCommand}
-        />
-      ) : (
+      <div className="mt-3 flex gap-1 rounded-lg border border-white/10 bg-slate-950/60 p-1">
+        <button
+          type="button"
+          aria-pressed={tab === "youtube"}
+          onClick={() => setTab("youtube")}
+          className={`h-8 flex-1 rounded-md px-3 text-xs font-semibold transition ${
+            tab === "youtube"
+              ? "bg-white/10 text-slate-100"
+              : "text-slate-500 hover:text-slate-300"
+          }`}
+        >
+          YouTube
+        </button>
+        <button
+          type="button"
+          aria-pressed={tab === "external"}
+          onClick={() => setTab("external")}
+          className={`h-8 flex-1 rounded-md px-3 text-xs font-semibold transition ${
+            tab === "external"
+              ? "bg-white/10 text-slate-100"
+              : "text-slate-500 hover:text-slate-300"
+          }`}
+        >
+          Share a tab
+        </button>
+      </div>
+
+      {tab === "youtube" ? (
         <>
           <form className="mt-3 flex min-w-0 flex-col gap-2 sm:flex-row" onSubmit={handleSelectVideo}>
         <label htmlFor="video-input" className="sr-only">
@@ -166,7 +202,7 @@ export function WatchStage({
           onCommand={onCommand}
         />
       ) : (
-        <div className="mt-4 flex aspect-video items-center justify-center rounded-xl border border-dashed border-white/10 bg-slate-900/50 px-6 text-center">
+        <div className="mt-4 flex aspect-video max-h-[46vh] w-full items-center justify-center rounded-xl border border-dashed border-white/10 bg-slate-900/50 px-6 text-center">
           <div>
             <p className="text-sm font-medium text-slate-300">No video selected</p>
             <p className="mt-1 text-xs text-slate-500">
@@ -176,7 +212,25 @@ export function WatchStage({
         </div>
       )}
         </>
+      ) : bridge && onBridgeCommand ? (
+        <ExternalStage
+          bridge={bridge}
+          stream={stream}
+          connected={connected}
+          onCommand={onBridgeCommand}
+        />
+      ) : (
+        <div className="mt-4 flex aspect-video max-h-[46vh] w-full items-center justify-center rounded-xl border border-dashed border-white/10 bg-slate-900/50 px-6 text-center">
+          <div>
+            <p className="text-sm font-medium text-slate-300">Nothing shared yet</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Start the companion on the site that is playing the video.
+            </p>
+          </div>
+        </div>
       )}
+
+      {tab === "external" ? companionSlot : null}
     </section>
   );
 }

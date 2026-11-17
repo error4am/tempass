@@ -228,21 +228,19 @@ export function Room({ roomId, session }: RoomProps) {
     }
   }
 
-  const capacity = snapshot?.room.capacity ?? participants.length;
+  const capacity = snapshot?.room.capacity ?? null;
   const statusLabel = STATUS_LABELS[status];
 
   return (
     <Shell wide>
       <div className="flex flex-1 flex-col gap-4">
-        <section className="flex flex-col justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:flex-row sm:items-center">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Room</p>
-            <h1 className="mt-1 font-mono text-xl font-semibold tracking-tight text-slate-100 sm:text-2xl">
-              {roomId}
-            </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              {participants.length} of {capacity} participants
-            </p>
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Room</span>
+            <code className="min-w-0 truncate font-mono text-sm text-slate-200">{roomId}</code>
+            <span className="text-xs text-slate-500">
+              {participants.length}/{capacity ?? "—"} watching
+            </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -266,7 +264,7 @@ export function Room({ roomId, session }: RoomProps) {
             <button
               type="button"
               onClick={handleLeave}
-              className="h-9 rounded-lg border border-white/10 bg-white/5 px-4 text-sm font-medium text-slate-300 transition hover:bg-white/10"
+              className="h-8 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-slate-300 transition hover:bg-white/10"
             >
               Leave room
             </button>
@@ -307,14 +305,13 @@ export function Room({ roomId, session }: RoomProps) {
           </section>
         ) : null}
 
-        <CompanionCard roomId={roomId} token={session.token} />
-
         <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)]">
           <WatchStage
             playback={playback}
             bridge={bridge}
             stream={stream}
             onBridgeCommand={sendBridgeCommand}
+            companionSlot={<CompanionCard roomId={roomId} token={session.token} />}
             connected={status === "connected"}
             clockOffsetMs={serverClock.offsetMs}
             onCommand={handlePlaybackCommand}
@@ -340,7 +337,7 @@ export function Room({ roomId, session }: RoomProps) {
                 Participants
               </h2>
               <span className="text-xs text-slate-500">
-                {participants.length}/{capacity}
+                {participants.length}/{capacity ?? "-"}
               </span>
             </div>
 
