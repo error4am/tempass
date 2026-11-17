@@ -16,6 +16,7 @@ import { YouTubePlayer } from "./YouTubePlayer";
 interface WatchStageProps {
   playback: PlaybackUpdate | null;
   bridge?: BridgeState | null;
+  stream?: MediaStream | null;
   onBridgeCommand?: (command: BridgeCommand) => void;
   connected: boolean;
   clockOffsetMs?: number | null;
@@ -31,6 +32,7 @@ const PLAYBACK_STATUS_LABELS = {
 export function WatchStage({
   playback,
   bridge = null,
+  stream = null,
   onBridgeCommand,
   connected,
   clockOffsetMs = null,
@@ -117,6 +119,7 @@ export function WatchStage({
       {bridge && onBridgeCommand ? (
         <ExternalStage
           bridge={bridge}
+          stream={stream}
           connected={connected}
           onCommand={onBridgeCommand}
         />

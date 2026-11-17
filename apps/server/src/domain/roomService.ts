@@ -274,6 +274,25 @@ export class RoomService {
     return this.getCurrentParticipant(roomId, participantId, socketId) !== null;
   }
 
+  /** Socket ids of everyone currently connected as a participant in the room. */
+  getParticipantSocketIds(roomId: string): string[] {
+    const room = this.getActiveRoom(roomId);
+
+    if (!room) {
+      return [];
+    }
+
+    const ids: string[] = [];
+
+    for (const participant of room.participants.values()) {
+      if (participant.connected && participant.socketId) {
+        ids.push(participant.socketId);
+      }
+    }
+
+    return ids;
+  }
+
   postChatMessage(
     roomId: string,
     participantId: string,

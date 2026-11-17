@@ -23,6 +23,7 @@ import { sendPlaybackCommand } from "../realtime/playback";
 import { connectRoomSocket, type RoomSocket } from "../realtime/socket";
 import { useRoomBridge } from "../realtime/useRoomBridge";
 import { useRoomPlayback } from "../realtime/useRoomPlayback";
+import { useRoomStream } from "../realtime/useRoomStream";
 import { useServerClock } from "../realtime/useServerClock";
 
 type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "error";
@@ -58,6 +59,7 @@ export function Room({ roomId, session }: RoomProps) {
   const socketRef = useRef<RoomSocket | null>(null);
   const { playback, applyUpdate } = useRoomPlayback(roomId, socket, snapshot);
   const { bridge, sendCommand: sendBridgeCommand } = useRoomBridge(roomId, socket);
+  const stream = useRoomStream(socket);
   const serverClock = useServerClock(roomId, socket);
 
   const mediaLoader = useMemo(
@@ -311,6 +313,7 @@ export function Room({ roomId, session }: RoomProps) {
           <WatchStage
             playback={playback}
             bridge={bridge}
+            stream={stream}
             onBridgeCommand={sendBridgeCommand}
             connected={status === "connected"}
             clockOffsetMs={serverClock.offsetMs}

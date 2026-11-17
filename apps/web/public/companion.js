@@ -2,11 +2,16 @@
  * Tempass companion
  * -----------------
  * Runs inside the tab that is actually playing the video (aryplus.tv or any
- * other site that refuses to be embedded). It reports the media element's
- * state to a Tempass room and applies the room's play / pause / seek commands.
+ * other site that refuses to be embedded). It does two jobs:
  *
- * It never touches the media itself: no proxying, no downloading, no DRM.
- * It only presses the same buttons a viewer would press.
+ *   1. Reports the media element's state to a Tempass room and applies the
+ *      room's play / pause / seek commands — the room's remote control.
+ *   2. Optionally captures this tab (getDisplayMedia) and sends it to the room
+ *      over WebRTC, so the picture shows up inside Tempass.
+ *
+ * It never re-hosts the media: no proxying, no downloading, no DRM bypass. The
+ * capture is a live peer-to-peer view of a tab the presenter is already
+ * watching, like sharing a screen on a call.
  *
  * Usage (bookmarklet):
  *   javascript:(()=>{const s=document.createElement('script');
@@ -27,9 +32,11 @@
     }
 
     var candidates = [];
+
     if (document.currentScript && document.currentScript.src) {
       candidates.push(document.currentScript.src);
     }
+
     for (var i = document.scripts.length - 1; i >= 0; i -= 1) {
       var src = document.scripts[i].src || "";
       if (src.indexOf("companion.js") !== -1) {
@@ -71,21 +78,22 @@
   var EMIT_INTERVAL_MS = 2000;
   var LOCAL_ECHO_GUARD_MS = 700;
   var VIDEO_RESCAN_MS = 3000;
+  var ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
 
   var socket = null;
   var bound = new WeakSet();
   var video = null;
   var applying = false;
-  var lastLocalActionAt = 0;
   var emitTimer = 0;
   var scanTimer = 0;
-  var suspended = false;
-  var revision = 0;
+
+  var sharedStream = null;
+  var peers = []; // participant socket ids
+  var connections = {}; // socketId -> { pc, pending: [] }
+  var sharing = false;
 
   /* ------------------------------------------------------------------ *
    * Keep playing when the tab goes to the background.
-   * Many players pause themselves on visibilitychange; the presenter needs
-   * this tab to keep running while the Tempass room is in front.
    * ------------------------------------------------------------------ */
   function patchVisibility() {
     try {
@@ -115,7 +123,7 @@
         true,
       );
     } catch (error) {
-      /* non-fatal: the tab may still pause itself */
+      /* non-fatal */
     }
   }
 
@@ -129,20 +137,48 @@
     "z-index:2147483647",
     "right:16px",
     "bottom:16px",
-    "padding:8px 12px",
+    "display:flex",
+    "align-items:center",
+    "gap:10px",
+    "padding:8px 10px",
     "border-radius:10px",
-    "background:rgba(9,9,15,.92)",
+    "background:rgba(9,9,15,.94)",
     "color:#e2e8f0",
     "font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace",
     "box-shadow:0 6px 24px rgba(0,0,0,.45)",
     "border:1px solid rgba(255,255,255,.12)",
-    "pointer-events:none",
-    "max-width:280px",
+    "max-width:360px",
   ].join(";");
 
-  function setBadge(text, tone) {
-    badge.textContent = text;
-    badge.style.color = tone === "error" ? "#fda4af" : "#e2e8f0";
+  var statusEl = document.createElement("span");
+  statusEl.textContent = "Tempass: starting…";
+
+  var shareButton = document.createElement("button");
+  shareButton.type = "button";
+  shareButton.textContent = "Share this tab";
+  shareButton.style.cssText = [
+    "cursor:pointer",
+    "border:0",
+    "border-radius:7px",
+    "padding:6px 10px",
+    "font:600 11px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace",
+    "background:#f43f5e",
+    "color:#fff",
+  ].join(";");
+  shareButton.addEventListener("click", function () {
+    if (sharing) {
+      stopSharing();
+    } else {
+      startSharing();
+    }
+  });
+
+  badge.appendChild(statusEl);
+  badge.appendChild(shareButton);
+
+  function setStatus(text, tone) {
+    statusEl.textContent = text;
+    statusEl.style.color = tone === "error" ? "#fda4af" : "#e2e8f0";
   }
 
   function mountBadge() {
@@ -152,7 +188,7 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * Video discovery
+   * Video discovery + state reporting
    * ------------------------------------------------------------------ */
   function pickVideo() {
     var videos = [].slice.call(document.querySelectorAll("video"));
@@ -161,9 +197,9 @@
 
     for (var i = 0; i < videos.length; i += 1) {
       var candidate = videos[i];
-      var width = candidate.clientWidth || candidate.videoWidth || 0;
-      var height = candidate.clientHeight || candidate.videoHeight || 0;
-      var score = width * height;
+      var score =
+        (candidate.clientWidth || candidate.videoWidth || 0) *
+        (candidate.clientHeight || candidate.videoHeight || 0);
 
       if (score > bestScore) {
         bestScore = score;
@@ -188,26 +224,20 @@
     return Math.round(video.duration);
   }
 
-  /* ------------------------------------------------------------------ *
-   * Reporting
-   * ------------------------------------------------------------------ */
   function report() {
-    if (!socket || !socket.connected || !video) {
+    if (!socket || !socket.connected || !video || applying) {
       return;
     }
-
-    // Ignore the brief window where our own seek/pause/play is settling.
-    if (applying) {
-      return;
-    }
-
-    var title =
-      document.title ||
-      (video.getAttribute && video.getAttribute("title")) ||
-      "External video";
 
     socket.emit("bridge:state", {
-      source: { url: location.href, title: String(title).slice(0, 200) },
+      source: {
+        url: location.href,
+        title: String(
+          document.title ||
+            (video.getAttribute && video.getAttribute("title")) ||
+            "External video",
+        ).slice(0, 200),
+      },
       status: video.paused ? "paused" : "playing",
       positionSeconds: currentPosition(),
       durationSeconds: currentDuration(),
@@ -218,8 +248,36 @@
     window.setTimeout(report, delay || 0);
   }
 
+  function bindVideo(next) {
+    if (!next || bound.has(next)) {
+      video = next || video;
+      return;
+    }
+
+    bound.add(next);
+    video = next;
+
+    var onLocal = function () {
+      reportSoon(60);
+    };
+
+    next.addEventListener("play", onLocal);
+    next.addEventListener("pause", onLocal);
+    next.addEventListener("seeked", onLocal);
+    next.addEventListener("loadedmetadata", onLocal);
+    next.addEventListener("ratechange", onLocal);
+  }
+
+  function scan() {
+    var next = pickVideo();
+    if (next && next !== video) {
+      bindVideo(next);
+      report();
+    }
+  }
+
   /* ------------------------------------------------------------------ *
-   * Remote commands
+   * Remote playback commands
    * ------------------------------------------------------------------ */
   function applyCommand(command) {
     if (!video) {
@@ -227,10 +285,6 @@
     }
 
     applying = true;
-    revision += 1;
-    var guard = window.setTimeout(function () {
-      applying = false;
-    }, LOCAL_ECHO_GUARD_MS);
 
     try {
       if (command.action === "seek") {
@@ -242,7 +296,7 @@
         var played = video.play();
         if (played && typeof played.catch === "function") {
           played.catch(function () {
-            setBadge("Tap the video once to allow playback", "error");
+            setStatus("Tap the video once to allow playback", "error");
           });
         }
       } else if (command.action === "pause") {
@@ -256,43 +310,139 @@
     }
 
     window.setTimeout(function () {
-      window.clearTimeout(guard);
       applying = false;
       report();
     }, LOCAL_ECHO_GUARD_MS + 250);
   }
 
   /* ------------------------------------------------------------------ *
-   * Local listeners
+   * Tab capture -> WebRTC
    * ------------------------------------------------------------------ */
-  function bindVideo(next) {
-    if (!next || bound.has(next)) {
-      video = next || video;
+  function createPeer(socketId) {
+    if (connections[socketId] || !sharedStream) {
       return;
     }
 
-    bound.add(next);
-    video = next;
+    var pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    var entry = { pc: pc, pending: [] };
+    connections[socketId] = entry;
 
-    var onLocal = function () {
-      lastLocalActionAt = Date.now();
-      reportSoon(60);
+    sharedStream.getTracks().forEach(function (track) {
+      pc.addTrack(track, sharedStream);
+    });
+
+    pc.onicecandidate = function (event) {
+      if (event.candidate) {
+        socket.emit("webrtc:signal", {
+          to: socketId,
+          data: { type: "candidate", candidate: event.candidate.toJSON() },
+        });
+      }
     };
 
-    next.addEventListener("play", onLocal);
-    next.addEventListener("pause", onLocal);
-    next.addEventListener("seeked", onLocal);
-    next.addEventListener("loadedmetadata", onLocal);
-    next.addEventListener("ratechange", onLocal);
+    pc.onconnectionstatechange = function () {
+      if (pc.connectionState === "failed") {
+        closePeer(socketId);
+      }
+    };
 
-    setBadge("Tempass: connected to " + location.hostname);
+    pc.createOffer()
+      .then(function (offer) {
+        return pc.setLocalDescription(offer);
+      })
+      .then(function () {
+        socket.emit("webrtc:signal", {
+          to: socketId,
+          data: { type: "offer", sdp: pc.localDescription.sdp },
+        });
+      })
+      .catch(function () {
+        closePeer(socketId);
+      });
   }
 
-  function scan() {
-    var next = pickVideo();
-    if (next && next !== video) {
-      bindVideo(next);
-      report();
+  function closePeer(socketId) {
+    var entry = connections[socketId];
+    if (!entry) {
+      return;
+    }
+    try {
+      entry.pc.close();
+    } catch (error) {
+      /* ignore */
+    }
+    delete connections[socketId];
+  }
+
+  function syncPeers() {
+    if (!sharing) {
+      return;
+    }
+
+    for (var i = 0; i < peers.length; i += 1) {
+      createPeer(peers[i]);
+    }
+
+    Object.keys(connections).forEach(function (socketId) {
+      if (peers.indexOf(socketId) === -1) {
+        closePeer(socketId);
+      }
+    });
+  }
+
+  function beginSharing(stream) {
+    sharedStream = stream;
+    sharing = true;
+    shareButton.textContent = "Stop sharing";
+    setStatus("Sharing this tab with the room");
+
+    var videoTrack = stream.getVideoTracks()[0];
+
+    if (videoTrack) {
+      videoTrack.addEventListener("ended", function () {
+        stopSharing();
+      });
+    }
+
+    syncPeers();
+  }
+
+  function startSharing() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      setStatus("This browser cannot capture a tab", "error");
+      return;
+    }
+
+    setStatus("Pick this tab, then share…");
+
+    navigator.mediaDevices
+      .getDisplayMedia({
+        video: { displaySurface: "browser" },
+        audio: true,
+        preferCurrentTab: true,
+        selfBrowserSurface: "exclude",
+        surfaceSwitching: "include",
+      })
+      .then(function (stream) {
+        beginSharing(stream);
+      })
+      .catch(function () {
+        setStatus("Tab capture was cancelled", "error");
+      });
+  }
+
+  function stopSharing() {
+    sharing = false;
+    shareButton.textContent = "Share this tab";
+    setStatus("Tempass: connected");
+
+    Object.keys(connections).forEach(closePeer);
+
+    if (sharedStream) {
+      sharedStream.getTracks().forEach(function (track) {
+        track.stop();
+      });
+      sharedStream = null;
     }
   }
 
@@ -319,48 +469,80 @@
   function connect() {
     socket = window.io(CONFIG.server, {
       auth: { token: CONFIG.token, role: "bridge" },
-      // Polling first: source sites commonly send
-      // `connect-src https:` which allows HTTPS XHR but blocks ws://wss://.
-      // Our update rate is one message every 2s, so polling is plenty.
+      // HTTPS XHR only: source sites usually allow `https:` in connect-src
+      // but block ws:// and wss://.
       transports: ["polling"],
       upgrade: false,
       reconnection: true,
     });
 
     socket.on("connect", function () {
-      setBadge("Tempass: connected to " + location.hostname);
+      setStatus("Tempass: connected to " + location.hostname);
       report();
     });
 
     socket.on("disconnect", function () {
-      setBadge("Tempass: reconnecting…", "error");
+      setStatus("Tempass: reconnecting…", "error");
     });
 
     socket.on("connect_error", function (error) {
-      setBadge("Tempass: " + (error && error.message ? error.message : "cannot connect"), "error");
+      setStatus(
+        "Tempass: " + (error && error.message ? error.message : "cannot connect"),
+        "error",
+      );
     });
 
     socket.on("bridge:command", function (command) {
       applyCommand(command);
+    });
+
+    socket.on("room:peers", function (payload) {
+      peers = ((payload && payload.peers) || []).map(function (peer) {
+        return peer.socketId;
+      });
+      syncPeers();
+    });
+
+    socket.on("webrtc:signal", function (message) {
+      var entry = message && connections[message.from];
+      if (!entry) {
+        return;
+      }
+
+      var data = message.data || {};
+
+      if (data.type === "answer") {
+        entry.pc
+          .setRemoteDescription({ type: "answer", sdp: data.sdp })
+          .then(function () {
+            entry.pending.splice(0).forEach(function (candidate) {
+              entry.pc.addIceCandidate(candidate).catch(function () {});
+            });
+          })
+          .catch(function () {});
+        return;
+      }
+
+      if (data.type === "candidate" && data.candidate) {
+        if (entry.pc.remoteDescription) {
+          entry.pc.addIceCandidate(data.candidate).catch(function () {});
+        } else {
+          entry.pending.push(data.candidate);
+        }
+      }
     });
   }
 
   function start() {
     patchVisibility();
     mountBadge();
-    setBadge("Tempass: starting…");
-
     scan();
     scanTimer = window.setInterval(scan, VIDEO_RESCAN_MS);
-    emitTimer = window.setInterval(function () {
-      if (!suspended) {
-        report();
-      }
-    }, EMIT_INTERVAL_MS);
+    emitTimer = window.setInterval(report, EMIT_INTERVAL_MS);
 
     loadSocketIo(CONFIG.server, function (error) {
       if (error) {
-        setBadge("Tempass: " + error.message, "error");
+        setStatus("Tempass: " + error.message, "error");
         return;
       }
       connect();
@@ -370,6 +552,8 @@
   function destroy() {
     window.clearInterval(emitTimer);
     window.clearInterval(scanTimer);
+    stopSharing();
+
     if (socket) {
       try {
         socket.disconnect();
@@ -378,20 +562,31 @@
       }
       socket = null;
     }
+
     if (badge.isConnected) {
       badge.remove();
     }
+
     window.__tempassCompanion = null;
   }
 
   window.__tempassCompanion = {
     destroy: destroy,
     report: report,
+    startSharing: startSharing,
+    beginSharing: beginSharing,
+    stopSharing: stopSharing,
     get video() {
       return video;
     },
     get socket() {
       return socket;
+    },
+    get peers() {
+      return peers.slice();
+    },
+    get connections() {
+      return connections;
     },
   };
 

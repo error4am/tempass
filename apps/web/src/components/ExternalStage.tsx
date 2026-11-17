@@ -1,9 +1,10 @@
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 
 import type { BridgeCommand, BridgeState } from "@tempass/shared";
 
 interface ExternalStageProps {
   bridge: BridgeState;
+  stream?: MediaStream | null;
   connected: boolean;
   onCommand: (command: BridgeCommand) => void;
 }
@@ -39,10 +40,36 @@ function hostOf(url: string): string {
  */
 export function ExternalStage({
   bridge,
+  stream = null,
   connected,
   onCommand,
 }: ExternalStageProps) {
   const [seekPreview, setSeekPreview] = useState<number | null>(null);
+  const [needsGesture, setNeedsGesture] = useState(false);
+  const [framesArrived, setFramesArrived] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const element = videoRef.current;
+
+    if (!element || !stream) {
+      return;
+    }
+
+    element.srcObject = stream;
+    setNeedsGesture(false);
+    setFramesArrived(false);
+
+    const played = element.play();
+
+    if (played && typeof played.catch === "function") {
+      played.catch(() => setNeedsGesture(true));
+    }
+
+    return () => {
+      element.srcObject = null;
+    };
+  }, [stream]);
 
   const { status, positionSeconds, durationSeconds, source } = bridge;
   const playing = status === "playing";
@@ -60,21 +87,70 @@ export function ExternalStage({
 
   return (
     <div className="mt-4">
-      <div className="relative flex aspect-video flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border border-white/10 bg-slate-950 px-6 text-center">
-        <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-300">
-          {playing ? "Playing live from source" : "Paused at source"}
-        </span>
+      <div className="relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black">
+        {stream ? (
+          <>
+            <video
+              ref={videoRef}
+              className="h-full w-full object-contain"
+              playsInline
+              autoPlay
+              onLoadedMetadata={() => setFramesArrived(true)}
+            />
 
-        <p className="max-w-sm text-sm text-slate-300">
-          {source.title ?? "External video"}
-        </p>
+            {!framesArrived ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 text-xs text-slate-400">
+                Connecting to the presenter&apos;s tab…
+              </div>
+            ) : null}
 
-        <p className="font-mono text-xs text-slate-500">{hostOf(source.url)}</p>
+            <span className="absolute left-3 top-3 rounded-full border border-emerald-400/30 bg-slate-950/80 px-3 py-1 text-xs font-medium text-emerald-300">
+              {playing ? "Live from source" : "Source paused"}
+            </span>
 
-        <p className="max-w-xs text-xs text-slate-500">
-          This site blocks embedding, so it plays in the presenter&apos;s tab.
-          Their tab is the screen — keep it open.
-        </p>
+            {needsGesture ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const element = videoRef.current;
+
+                  if (!element) {
+                    return;
+                  }
+
+                  const played = element.play();
+
+                  if (played && typeof played.catch === "function") {
+                    played.catch(() => {});
+                  }
+
+                  setNeedsGesture(false);
+                }}
+                className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-sm font-semibold text-white"
+              >
+                Tap to start the shared tab
+              </button>
+            ) : null}
+          </>
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-300">
+              {playing ? "Playing live from source" : "Paused at source"}
+            </span>
+
+            <p className="max-w-sm text-sm text-slate-300">
+              {source.title ?? "External video"}
+            </p>
+
+            <p className="font-mono text-xs text-slate-500">{hostOf(source.url)}</p>
+
+            <p className="max-w-xs text-xs text-slate-500">
+              The picture appears here once the presenter clicks{" "}
+              <span className="text-slate-400">Share this tab</span> in the
+              companion badge. Keep that tab open.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="mt-3 flex min-w-0 flex-col gap-3 rounded-xl border border-white/5 bg-slate-950/40 p-3">

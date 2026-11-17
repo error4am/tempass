@@ -9,6 +9,7 @@ import {
   playbackCommandSchema,
   sendChatMessagePayloadSchema,
   socketAuthSchema,
+  webrtcSignalSchema,
   type BridgeState,
   type ChatMessage,
   type ChatSendAck,
@@ -85,6 +86,8 @@ export function attachRealtime(
 
   /** Latest reported state per room from the companion running on the source site. */
   const bridges = new Map<string, BridgeState>();
+  /** Bridge sockets per room, so participants can be offered the captured tab. */
+  const bridgeSockets = new Map<string, Set<string>>();
 
   io.use((socket, next) => {
     const auth = socketAuthSchema.safeParse(socket.handshake.auth);
@@ -115,7 +118,7 @@ export function attachRealtime(
     }
 
     if (socket.data.role === "bridge") {
-      attachBridge(socket, session, io, bridges, roomService);
+      attachBridge(socket, session, io, bridges, bridgeSockets, roomService);
       return;
     }
 
@@ -145,6 +148,8 @@ export function attachRealtime(
 
     socket.emit(SOCKET_EVENTS.ROOM_SNAPSHOT, snapshot);
     broadcastRoomPresence(io, roomService, session.roomId);
+    attachSignalling(socket, session.roomId, io, roomService, bridgeSockets);
+    broadcastPeers(io, roomService, bridgeSockets, session.roomId);
 
     const recentChatMessageTimes: number[] = [];
     const recentPlaybackCommandTimes: number[] = [];
@@ -372,6 +377,7 @@ export function attachRealtime(
 
       if (changed) {
         broadcastRoomPresence(io, roomService, session.roomId);
+        broadcastPeers(io, roomService, bridgeSockets, session.roomId);
       }
     });
   });
@@ -417,17 +423,25 @@ function attachBridge(
   session: { roomId: string; participantId: string },
   io: TempassSocketServer,
   bridges: Map<string, BridgeState>,
+  bridgeSockets: Map<string, Set<string>>,
   roomService: RoomService,
 ): void {
   const roomId = session.roomId;
 
   socket.join(roomId);
 
+  const roomBridges = bridgeSockets.get(roomId) ?? new Set<string>();
+  roomBridges.add(socket.id);
+  bridgeSockets.set(roomId, roomBridges);
+
   const existing = bridges.get(roomId);
 
   if (existing) {
     socket.emit(SOCKET_EVENTS.BRIDGE_STATE, existing);
   }
+
+  attachSignalling(socket, roomId, io, roomService, bridgeSockets);
+  broadcastPeers(io, roomService, bridgeSockets, roomId);
 
   socket.on(SOCKET_EVENTS.BRIDGE_STATE, (payload, ack) => {
     const parsed = bridgeStateReportSchema.safeParse(payload);
@@ -450,6 +464,15 @@ function attachBridge(
   });
 
   socket.on("disconnect", () => {
+    const set = bridgeSockets.get(roomId);
+    set?.delete(socket.id);
+
+    if (set && set.size > 0) {
+      return;
+    }
+
+    bridgeSockets.delete(roomId);
+
     if (!bridges.has(roomId)) {
       return;
     }
@@ -457,6 +480,61 @@ function attachBridge(
     bridges.delete(roomId);
     io.to(roomId).emit(SOCKET_EVENTS.BRIDGE_STATE, null);
   });
+}
+
+/** Relays WebRTC offers/answers/ICE between a bridge and the room's participants. */
+function attachSignalling(
+  socket: Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>,
+  roomId: string,
+  io: TempassSocketServer,
+  roomService: RoomService,
+  bridgeSockets: Map<string, Set<string>>,
+): void {
+  socket.on(SOCKET_EVENTS.WEBRTC_SIGNAL, (payload, ack) => {
+    const parsed = webrtcSignalSchema.safeParse(payload);
+
+    if (!parsed.success) {
+      ack?.({ ok: false });
+      return;
+    }
+
+    const target = parsed.data.to;
+    const isParticipant = roomService.getParticipantSocketIds(roomId).includes(target);
+    const isBridge = bridgeSockets.get(roomId)?.has(target) ?? false;
+
+    if (!isParticipant && !isBridge) {
+      ack?.({ ok: false });
+      return;
+    }
+
+    io.to(target).emit(SOCKET_EVENTS.WEBRTC_SIGNAL, {
+      from: socket.id,
+      data: parsed.data.data,
+    });
+
+    ack?.({ ok: true });
+  });
+}
+
+function broadcastPeers(
+  io: TempassSocketServer,
+  roomService: RoomService,
+  bridgeSockets: Map<string, Set<string>>,
+  roomId: string,
+): void {
+  const bridges = bridgeSockets.get(roomId);
+
+  if (!bridges || bridges.size === 0) {
+    return;
+  }
+
+  const peers = roomService
+    .getParticipantSocketIds(roomId)
+    .map((socketId) => ({ socketId }));
+
+  for (const bridgeSocketId of bridges) {
+    io.to(bridgeSocketId).emit(SOCKET_EVENTS.ROOM_PEERS, { peers });
+  }
 }
 
 

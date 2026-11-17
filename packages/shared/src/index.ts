@@ -432,6 +432,25 @@ export const bridgeStateAckSchema = z.discriminatedUnion("ok", [
 
 export type BridgeStateAck = z.infer<typeof bridgeStateAckSchema>;
 
+/**
+ * WebRTC signalling relay. The companion captures the presenter's tab and
+ * offers it to each participant; the server only passes these payloads along.
+ */
+export const webrtcSignalSchema = z
+  .object({
+    to: z.string().min(1).max(64),
+    data: z.unknown(),
+  })
+  .strict();
+
+export type WebrtcSignal = z.infer<typeof webrtcSignalSchema>;
+
+export const roomPeersSchema = z.object({
+  peers: z.array(z.object({ socketId: z.string().min(1).max(64) }).strict()),
+});
+
+export type RoomPeers = z.infer<typeof roomPeersSchema>;
+
 export const roomSnapshotSchema = z.object({
   room: publicRoomSchema,
   self: publicParticipantSchema,
@@ -507,6 +526,8 @@ export const SOCKET_EVENTS = {
   CLOCK_SYNC: "clock:sync",
   BRIDGE_STATE: "bridge:state",
   BRIDGE_COMMAND: "bridge:command",
+  ROOM_PEERS: "room:peers",
+  WEBRTC_SIGNAL: "webrtc:signal",
 } as const;
 
 export interface ClientToServerEvents {
@@ -519,6 +540,7 @@ export interface ClientToServerEvents {
   "clock:sync": (payload: unknown, ack?: (response: ClockSyncAck) => void) => void;
   "bridge:state": (payload: unknown, ack?: (response: BridgeStateAck) => void) => void;
   "bridge:command": (payload: unknown, ack?: (response: { ok: boolean }) => void) => void;
+  "webrtc:signal": (payload: unknown, ack?: (response: { ok: boolean }) => void) => void;
 }
 
 export interface ServerToClientEvents {
@@ -528,6 +550,8 @@ export interface ServerToClientEvents {
   "playback:state": (update: PlaybackUpdate) => void;
   "bridge:state": (state: BridgeState | null) => void;
   "bridge:command": (command: BridgeCommand) => void;
+  "room:peers": (peers: RoomPeers) => void;
+  "webrtc:signal": (message: { from: string; data: unknown }) => void;
 }
 
 export function roomInvitePath(roomId: string): string {
