@@ -131,7 +131,10 @@ describe("createChatMediaLoader", () => {
     loader.dispose();
 
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:object-1");
-    await expect(loader.load(MEDIA.id)).rejects.toMatchObject({ code: "INTERNAL" });
+
+    // A remount (React StrictMode in development) reuses the same loader.
+    await expect(loader.load(MEDIA.id)).resolves.toBe("blob:object-1");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("rejects with MEDIA_NOT_FOUND when the server refuses the image", async () => {

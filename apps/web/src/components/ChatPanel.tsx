@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type ClipboardEvent as ReactClipboardEvent,
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
@@ -241,6 +242,21 @@ export function ChatPanel({
       });
   }
 
+  function acceptImageFile(file: File): boolean {
+    if (!(CHAT_IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) {
+      setError("Choose a JPEG, PNG, WebP, or GIF image.");
+      return false;
+    }
+
+    if (file.size > MAX_CHAT_IMAGE_BYTES) {
+      setError(`Images must be ${MAX_IMAGE_MEGABYTES} MB or smaller.`);
+      return false;
+    }
+
+    startUpload(file);
+    return true;
+  }
+
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -249,17 +265,60 @@ export function ChatPanel({
       return;
     }
 
-    if (!(CHAT_IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) {
-      setError("Choose a JPEG, PNG, WebP, or GIF image.");
+    acceptImageFile(file);
+  }
+
+  /**
+   * Pasting a screenshot or a copied image attaches it instead of inserting a
+   * filename. Plain text pastes are left alone.
+   */
+  function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
+    if (!onUploadImage || attachDisabled) {
       return;
     }
 
-    if (file.size > MAX_CHAT_IMAGE_BYTES) {
-      setError(`Images must be ${MAX_IMAGE_MEGABYTES} MB or smaller.`);
+    const data = event.clipboardData;
+
+    if (!data) {
       return;
     }
 
-    startUpload(file);
+    let file: File | null = null;
+
+    for (const item of Array.from(data.items ?? [])) {
+      if (item.kind !== "file") {
+        continue;
+      }
+
+      const candidate = item.getAsFile();
+
+      if (candidate && candidate.type.startsWith("image/")) {
+        file = candidate;
+        break;
+      }
+    }
+
+    if (!file) {
+      for (const candidate of Array.from(data.files ?? [])) {
+        if (candidate.type.startsWith("image/")) {
+          file = candidate;
+          break;
+        }
+      }
+    }
+
+    if (!file) {
+      return;
+    }
+
+    // Keep the image and drop the filename text the browser would insert.
+    event.preventDefault();
+
+    if (!acceptImageFile(file)) {
+      return;
+    }
+
+    inputRef.current?.focus({ preventScroll: true });
   }
 
   function retryUpload() {
@@ -468,6 +527,7 @@ export function ChatPanel({
             setError(null);
           }}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           rows={2}
           placeholder={connected ? "Write a message…" : "Reconnect to send messages"}
           disabled={!connected || sending}
@@ -564,7 +624,7 @@ export function ChatPanel({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   aria-label="Attach image"
-                  title={`Attach an image (max ${MAX_IMAGE_MEGABYTES} MB)`}
+                  title={`Attach an image (max ${MAX_IMAGE_MEGABYTES} MB) or paste one with Ctrl+V`}
                   disabled={attachDisabled}
                   className="h-9 shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >

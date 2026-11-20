@@ -255,8 +255,94 @@ describe("ChatPanel image sharing", () => {
     });
   });
 
-  it("rejects unsupported and oversized files before uploading", async () => {
+  it("uploads an image pasted into the composer", async () => {
+    const upload = deferred<ChatMedia>();
+    const onUploadImage = vi.fn(() => upload.promise);
+
+    render(
+      <ChatPanel
+        messages={[]}
+        selfId="participant-alex"
+        connected
+        onSend={vi.fn()}
+        onUploadImage={onUploadImage}
+      />,
+    );
+
+    const file = imageFile("screenshot.png");
+    const notCancelled = fireEvent.paste(screen.getByLabelText("Message"), {
+      clipboardData: {
+        items: [{ kind: "file", type: file.type, getAsFile: () => file }],
+        files: [file],
+      },
+    });
+
+    expect(notCancelled).toBe(false);
+    expect(onUploadImage).toHaveBeenCalledTimes(1);
+    expect(onUploadImage).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(screen.getByAltText("Selected image preview")).toBeTruthy();
+
+    await act(async () => {
+      upload.resolve(MEDIA);
+    });
+
+    await screen.findByText("Ready to send");
+  });
+
+  it("leaves a text-only paste alone", () => {
     const onUploadImage = vi.fn();
+
+    render(
+      <ChatPanel
+        messages={[]}
+        selfId="participant-alex"
+        connected
+        onSend={vi.fn()}
+        onUploadImage={onUploadImage}
+      />,
+    );
+
+    const notCancelled = fireEvent.paste(screen.getByLabelText("Message"), {
+      clipboardData: {
+        items: [{ kind: "string", type: "text/plain", getAsFile: () => null }],
+        files: [],
+      },
+    });
+
+    expect(notCancelled).toBe(true);
+    expect(onUploadImage).not.toHaveBeenCalled();
+  });
+
+  it("refuses a pasted image that is too large", () => {
+    const onUploadImage = vi.fn();
+
+    render(
+      <ChatPanel
+        messages={[]}
+        selfId="participant-alex"
+        connected
+        onSend={vi.fn()}
+        onUploadImage={onUploadImage}
+      />,
+    );
+
+    const file = imageFile("huge.png", "image/png", MAX_CHAT_IMAGE_BYTES + 1);
+
+    fireEvent.paste(screen.getByLabelText("Message"), {
+      clipboardData: {
+        items: [{ kind: "file", type: file.type, getAsFile: () => file }],
+        files: [file],
+      },
+    });
+
+    expect(screen.getByRole("alert").textContent).toContain("10 MB or smaller");
+    expect(onUploadImage).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported and oversized files before uploading", async () => {    const onUploadImage = vi.fn();
 
     render(
       <ChatPanel

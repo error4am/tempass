@@ -93,7 +93,10 @@ export function createChatMediaLoader(roomId: string, token: string): ChatMediaL
 
   function load(mediaId: string): Promise<string> {
     if (disposed) {
-      return Promise.reject(new ApiError("INTERNAL", "The room is closed", 0));
+      // React StrictMode runs an effect's cleanup and setup again in
+      // development, so the same loader is disposed and then reused. Revive it
+      // instead of failing every image in the room.
+      disposed = false;
     }
 
     const cached = urls.get(mediaId);
