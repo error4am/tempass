@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { SOCKET_EVENTS, type TabShareState } from "@tempass/shared";
 
+import { ICE_SERVERS } from "../lib/config";
 import type { RoomSocket } from "./socket";
 
 interface SignalMessage {
@@ -89,9 +90,7 @@ export function useRoomStream(
         offerKind = data.kind;
         pc?.close();
 
-        const connection = new RTCPeerConnection({
-          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-        });
+        const connection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
         pc = connection;
 
         connection.ontrack = (event) => {

@@ -19,6 +19,7 @@ function controller(
     error: null,
     start: vi.fn(async () => {}),
     stop: vi.fn(),
+    retry: vi.fn(),
     ...overrides,
   };
 }

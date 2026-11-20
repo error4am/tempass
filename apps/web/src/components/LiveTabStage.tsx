@@ -24,11 +24,31 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const [needsGesture, setNeedsGesture] = useState(false);
   const [framesArrived, setFramesArrived] = useState(false);
+  const [slowConnect, setSlowConnect] = useState(false);
+
+  // The viewer only learns that ICE failed by never getting a frame. Say so
+  // instead of showing "Connecting…" forever. Once shown it stays until a real
+  // frame lands, so a re-offer does not hide it again.
+  useEffect(() => {
+    if (framesArrived || !share.stream) {
+      setSlowConnect(false);
+      return;
+    }
+
+    if (slowConnect) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setSlowConnect(true), 8_000);
+
+    return () => window.clearTimeout(timer);
+  }, [share.stream, framesArrived, slowConnect]);
 
   useEffect(() => {
     const element = videoRef.current;
 
     if (!element || !share.stream) {
+      setFramesArrived(false);
       return;
     }
 
@@ -42,7 +62,27 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
       played.catch(() => setNeedsGesture(true));
     }
 
+    // "loadedmetadata" fires when the tracks are attached, before any picture
+    // arrives, so wait for an actual frame instead.
+    let cancelled = false;
+    const mark = () => {
+      if (!cancelled) {
+        setFramesArrived(true);
+      }
+    };
+    const frameVideo = element as HTMLVideoElement & {
+      requestVideoFrameCallback?: (callback: () => void) => number;
+    };
+
+    if (typeof frameVideo.requestVideoFrameCallback === "function") {
+      frameVideo.requestVideoFrameCallback(mark);
+    } else {
+      element.addEventListener("loadeddata", mark);
+    }
+
     return () => {
+      cancelled = true;
+      element.removeEventListener("loadeddata", mark);
       element.srcObject = null;
     };
   }, [share.stream]);
@@ -85,12 +125,17 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
                 className="h-full w-full object-contain"
                 playsInline
                 autoPlay
-                onLoadedMetadata={() => setFramesArrived(true)}
               />
 
               {!framesArrived ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 text-xs text-slate-400">
-                  Connecting to {share.active?.presenterName}&apos;s tab…
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 px-6 text-center text-xs text-slate-400">
+                  <span>Connecting to {share.active?.presenterName}&apos;s tab…</span>
+                  {slowConnect ? (
+                    <span className="max-w-sm text-amber-200">
+                      Still connecting. The link may be blocked by one of your
+                      networks — ask them to press Retry.
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -155,7 +200,7 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
       share.status === "waiting"
         ? "Nobody is watching right now — nothing is being sent."
         : share.status === "connecting"
-          ? "Connecting to the other participant…"
+          ? "Connecting to the other participant… if this stays stuck, press Retry."
           : share.status === "starting"
             ? "Starting the preview…"
             : "They see exactly this preview.";
@@ -187,13 +232,24 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
 
           <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-2 bg-slate-950/85 px-3 py-2">
             <p className="min-w-0 text-xs text-slate-300">{statusText}</p>
-            <button
-              type="button"
-              onClick={share.stop}
-              className="h-8 shrink-0 rounded-lg bg-rose-500 px-3 text-xs font-semibold text-white transition hover:bg-rose-400"
-            >
-              Stop sharing
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              {share.status === "connecting" ? (
+                <button
+                  type="button"
+                  onClick={share.retry}
+                  className="h-8 rounded-lg border border-white/15 bg-white/10 px-3 text-xs font-semibold text-slate-100 transition hover:bg-white/20"
+                >
+                  Retry
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={share.stop}
+                className="h-8 rounded-lg bg-rose-500 px-3 text-xs font-semibold text-white transition hover:bg-rose-400"
+              >
+                Stop sharing
+              </button>
+            </div>
           </div>
         </div>
 

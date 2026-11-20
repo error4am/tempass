@@ -108,6 +108,8 @@ Server configuration lives in `apps/server/.env` (see `.env.example`):
 
 The web client reads `VITE_API_URL` at build time (see `apps/web/.env.example`). Leave it empty
 locally so the Vite proxy is used; set it to the public backend origin for a deployed build.
+`VITE_ICE_SERVERS` optionally replaces the default public STUN list with your own, including a
+TURN server, as a JSON array.
 
 No external services or secrets are required. Never commit `.env` files.
 
@@ -202,8 +204,9 @@ participant IDs are random server-generated identifiers; clients cannot choose o
 - Live tab sharing is view-only. Co-browsing (letting the other person click) would need a
   browser extension and is not implemented.
 - Only one tab is shared at a time, and the viewer does not follow the presenter to other tabs.
-- Signalling uses a public STUN server only. Without TURN, a share may fail to connect on
-  restrictive networks.
+- Signalling uses public STUN by default. Set `VITE_ICE_SERVERS` (a JSON array, see
+  `apps/web/.env.example`) with a TURN server for reliable connections behind strict NATs;
+  without it a share can stay on "Connecting…".
 - Some source sites ship a Content-Security-Policy that only allows `https:` scripts and
   connections. A deployed (https) Tempass works, but pointing the companion at a local
   `http://localhost` API from such a site is blocked by the browser. Use an https tunnel or a

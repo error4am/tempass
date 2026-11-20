@@ -8,12 +8,18 @@ import {
   type TabShareSurface,
 } from "@tempass/shared";
 
+import { ICE_SERVERS } from "../lib/config";
 import type { RoomSocket } from "./socket";
 import { useRoomStream } from "./useRoomStream";
 
-const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
 const ACK_TIMEOUT_MS = 5_000;
 const RETRY_MS = 1_500;
+/** Give a fresh peer this long to reach "connected" before re-offering. */
+const CONNECT_TIMEOUT_MS = 10_000;
+/** A short "disconnected" blip may recover on its own. */
+const DISCONNECT_GRACE_MS = 5_000;
+/** After this many re-offers, wait for the presenter to retry by hand. */
+const MAX_ATTEMPTS = 3;
 
 export type TabShareStatus =
   | "idle"
@@ -40,11 +46,16 @@ export interface TabShareController {
   error: string | null;
   start: () => Promise<void>;
   stop: () => void;
+  /** Drop the current peer connections and offer again. */
+  retry: () => void;
 }
 
 interface PeerEntry {
   pc: RTCPeerConnection;
   pending: RTCIceCandidateInit[];
+  watchdog: number | null;
+  /** How many re-offers this peer has already had. */
+  attempts: number;
 }
 
 interface SignalMessage {
@@ -114,6 +125,7 @@ export function useTabShare(
   const stream = useRoomStream(socket, { kind: "share" });
   const startRef = useRef<() => Promise<void>>(async () => {});
   const stopRef = useRef<() => void>(() => {});
+  const retryRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (!socket) {
@@ -128,6 +140,13 @@ export function useTabShare(
     let currentSurface: TabShareSurface = "unknown";
     let targetSocketIds: string[] = [];
 
+    function clearWatchdog(entry: PeerEntry) {
+      if (entry.watchdog !== null) {
+        window.clearTimeout(entry.watchdog);
+        entry.watchdog = null;
+      }
+    }
+
     function closePeer(socketId: string) {
       const entry = peers.get(socketId);
 
@@ -135,6 +154,7 @@ export function useTabShare(
         return;
       }
 
+      clearWatchdog(entry);
       peers.delete(socketId);
 
       try {
@@ -150,7 +170,37 @@ export function useTabShare(
       }
     }
 
-    function createPeer(socketId: string) {
+    /**
+     * ICE can sit in "new"/"checking" forever when a candidate never arrives
+     * or a direct path is blocked. Nothing fires in that case, so the viewer
+     * keeps a black picture behind "Connecting…". Re-offer instead.
+     */
+    function reconnectPeer(socketId: string) {
+      const entry = peers.get(socketId);
+
+      if (!entry) {
+        return;
+      }
+
+      const attempts = entry.attempts;
+      closePeer(socketId);
+
+      if (attempts >= MAX_ATTEMPTS) {
+        setStatus("connecting");
+        return;
+      }
+
+      const timer = window.setTimeout(() => {
+        retries.delete(timer);
+
+        if (sharing && targetSocketIds.includes(socketId)) {
+          createPeer(socketId, attempts + 1);
+        }
+      }, RETRY_MS);
+      retries.add(timer);
+    }
+
+    function createPeer(socketId: string, attempts = 0) {
       if (peers.has(socketId) || !capture) {
         return;
       }
@@ -158,6 +208,8 @@ export function useTabShare(
       const entry: PeerEntry = {
         pc: new RTCPeerConnection({ iceServers: ICE_SERVERS }),
         pending: [],
+        watchdog: null,
+        attempts,
       };
       peers.set(socketId, entry);
 
@@ -179,28 +231,48 @@ export function useTabShare(
       };
 
       entry.pc.onconnectionstatechange = () => {
-        if (entry.pc.connectionState === "connected") {
+        const state = entry.pc.connectionState;
+
+        if (state === "connected") {
+          clearWatchdog(entry);
+          entry.attempts = 0;
           setStatus("live");
           return;
         }
 
-        if (entry.pc.connectionState !== "failed" || !sharing) {
+        if (!sharing) {
           return;
         }
 
-        // A broken path (network change, sleeping laptop) never recovers on its
-        // own, so drop the peer and offer again in a moment.
-        closePeer(socketId);
+        if (state === "failed") {
+          reconnectPeer(socketId);
+          return;
+        }
 
-        const timer = window.setTimeout(() => {
-          retries.delete(timer);
+        if (state === "disconnected") {
+          clearWatchdog(entry);
+          entry.watchdog = window.setTimeout(() => {
+            entry.watchdog = null;
 
-          if (sharing && targetSocketIds.includes(socketId)) {
-            createPeer(socketId);
-          }
-        }, RETRY_MS);
-        retries.add(timer);
+            if (entry.pc.connectionState !== "connected") {
+              reconnectPeer(socketId);
+            }
+          }, DISCONNECT_GRACE_MS);
+        }
       };
+
+      // A peer that never reaches "connected" would otherwise stay silent.
+      entry.watchdog = window.setTimeout(() => {
+        entry.watchdog = null;
+
+        if (!sharing || peers.get(socketId)?.pc !== entry.pc) {
+          return;
+        }
+
+        if (entry.pc.connectionState !== "connected") {
+          reconnectPeer(socketId);
+        }
+      }, CONNECT_TIMEOUT_MS);
 
       entry.pc
         .createOffer()
@@ -443,12 +515,14 @@ export function useTabShare(
         return;
       }
 
-      // A reconnect drops the server's record; announce again and re-offer.
+      // A reconnect drops the server's record; announce again and offer to
+      // everyone from scratch, since the old connections used a dead socket.
       liveSocket.emit(
         SOCKET_EVENTS.SHARE_START,
         { surface: currentSurface },
         () => {},
       );
+      closeAllPeers();
       syncPeers();
     }
 
@@ -463,6 +537,10 @@ export function useTabShare(
 
     startRef.current = start;
     stopRef.current = () => stop(true);
+    retryRef.current = () => {
+      closeAllPeers();
+      syncPeers();
+    };
 
     socket.on(SOCKET_EVENTS.ROOM_PEERS, handlePeers);
     socket.on(SOCKET_EVENTS.WEBRTC_SIGNAL, handleSignal);
@@ -485,6 +563,7 @@ export function useTabShare(
       stop(false);
       startRef.current = async () => {};
       stopRef.current = () => {};
+      retryRef.current = () => {};
     };
   }, [socket, selfId]);
 
@@ -497,6 +576,7 @@ export function useTabShare(
 
   const start = useCallback(() => startRef.current(), []);
   const stop = useCallback(() => stopRef.current(), []);
+  const retry = useCallback(() => retryRef.current(), []);
 
   return {
     active,
@@ -509,5 +589,6 @@ export function useTabShare(
     error,
     start,
     stop,
+    retry,
   };
 }
