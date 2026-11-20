@@ -25,6 +25,7 @@ import { useRoomBridge } from "../realtime/useRoomBridge";
 import { useRoomPlayback } from "../realtime/useRoomPlayback";
 import { useRoomStream } from "../realtime/useRoomStream";
 import { useServerClock } from "../realtime/useServerClock";
+import { useTabShare } from "../realtime/useTabShare";
 
 type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "error";
 
@@ -60,6 +61,7 @@ export function Room({ roomId, session }: RoomProps) {
   const { playback, applyUpdate } = useRoomPlayback(roomId, socket, snapshot);
   const { bridge, sendCommand: sendBridgeCommand } = useRoomBridge(roomId, socket);
   const stream = useRoomStream(socket);
+  const tabShare = useTabShare(socket, session.participantId);
   const serverClock = useServerClock(roomId, socket);
 
   const mediaLoader = useMemo(
@@ -312,6 +314,7 @@ export function Room({ roomId, session }: RoomProps) {
             stream={stream}
             onBridgeCommand={sendBridgeCommand}
             companionSlot={<CompanionCard roomId={roomId} token={session.token} />}
+            share={tabShare}
             connected={status === "connected"}
             clockOffsetMs={serverClock.offsetMs}
             onCommand={handlePlaybackCommand}

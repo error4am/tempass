@@ -9,6 +9,7 @@ import {
   playbackCommandSchema,
   sendChatMessagePayloadSchema,
   socketAuthSchema,
+  tabShareStartPayloadSchema,
   webrtcSignalSchema,
   type BridgeState,
   type ChatMessage,
@@ -19,6 +20,8 @@ import {
   type PlaybackErrorCode,
   type PlaybackUpdate,
   type ServerToClientEvents,
+  type TabShareAck,
+  type TabShareState,
 } from "@tempass/shared";
 import { Server, type Socket } from "socket.io";
 
@@ -88,6 +91,8 @@ export function attachRealtime(
   const bridges = new Map<string, BridgeState>();
   /** Bridge sockets per room, so participants can be offered the captured tab. */
   const bridgeSockets = new Map<string, Set<string>>();
+  /** Who is presenting a live tab in each room, if anyone. */
+  const shares = new Map<string, TabShareState>();
 
   io.use((socket, next) => {
     const auth = socketAuthSchema.safeParse(socket.handshake.auth);
@@ -147,9 +152,10 @@ export function attachRealtime(
     }
 
     socket.emit(SOCKET_EVENTS.ROOM_SNAPSHOT, snapshot);
+    socket.emit(SOCKET_EVENTS.SHARE_STATE, shares.get(session.roomId) ?? null);
     broadcastRoomPresence(io, roomService, session.roomId);
     attachSignalling(socket, session.roomId, io, roomService, bridgeSockets);
-    broadcastPeers(io, roomService, bridgeSockets, session.roomId);
+    broadcastPeers(io, roomService, session.roomId);
 
     const recentChatMessageTimes: number[] = [];
     const recentPlaybackCommandTimes: number[] = [];
@@ -345,6 +351,92 @@ export function attachRealtime(
       respond({ ok: true, message });
     });
 
+    const shareRoomId = session.roomId;
+    const shareParticipantId = session.participantId;
+
+    /**
+     * Drops the room's live-tab announcement when the presenter leaves, so the
+     * other participant stops waiting for a stream that no longer exists.
+     */
+    function withdrawShare(): void {
+      const current = shares.get(shareRoomId);
+
+      if (!current || current.presenterId !== shareParticipantId) {
+        return;
+      }
+
+      shares.delete(shareRoomId);
+      io.to(shareRoomId).emit(SOCKET_EVENTS.SHARE_STATE, null);
+    }
+
+    socket.on(SOCKET_EVENTS.SHARE_START, (payload, ack) => {
+      const respond = (response: TabShareAck) => {
+        ack?.(response);
+      };
+      const parsed = tabShareStartPayloadSchema.safeParse(payload ?? {});
+
+      if (!parsed.success) {
+        respond({ ok: false, code: "INVALID_INPUT" });
+        return;
+      }
+
+      if (
+        !roomService.isCurrentSocket(
+          session.roomId,
+          session.participantId,
+          socket.id,
+        )
+      ) {
+        respond({ ok: false, code: "UNAUTHORIZED" });
+        return;
+      }
+
+      const current = shares.get(session.roomId);
+
+      if (current && current.presenterId !== session.participantId) {
+        respond({ ok: false, code: "SHARE_BUSY" });
+        return;
+      }
+
+      const participant = roomService
+        .getPresence(session.roomId)
+        ?.participants.find((entry) => entry.id === session.participantId);
+
+      if (!participant) {
+        respond({ ok: false, code: "UNAUTHORIZED" });
+        return;
+      }
+
+      const state: TabShareState = {
+        presenterId: session.participantId,
+        presenterName: participant.displayName,
+        startedAt: roomService.getServerTime(),
+        surface: parsed.data.surface,
+      };
+
+      shares.set(shareRoomId, state);
+      io.to(shareRoomId).emit(SOCKET_EVENTS.SHARE_STATE, state);
+      // Refresh the socket list so the presenter can offer immediately, even if
+      // it missed the broadcast made when the other participant connected.
+      broadcastPeers(io, roomService, shareRoomId);
+      respond({ ok: true, state });
+    });
+
+    socket.on(SOCKET_EVENTS.SHARE_STOP, (_payload, ack) => {
+      const current = shares.get(session.roomId);
+
+      if (current && current.presenterId !== session.participantId) {
+        ack?.({ ok: false, code: "UNAUTHORIZED" });
+        return;
+      }
+
+      if (current) {
+        withdrawShare();
+      }
+
+      ack?.({ ok: true, state: null });
+    });
+
     socket.on(SOCKET_EVENTS.ROOM_LEAVE, (payload, ack) => {
       const parsed = leaveRoomPayloadSchema.safeParse(payload ?? {});
 
@@ -354,11 +446,13 @@ export function attachRealtime(
       }
 
       socket.data.left = true;
+      withdrawShare();
       const removed = roomService.leave(session.roomId, session.participantId);
       socket.leave(session.roomId);
 
       if (removed) {
         broadcastRoomPresence(io, roomService, session.roomId);
+        broadcastPeers(io, roomService, session.roomId);
       }
 
       ack?.({ ok: true });
@@ -369,6 +463,8 @@ export function attachRealtime(
         return;
       }
 
+      withdrawShare();
+
       const changed = roomService.markDisconnected(
         session.roomId,
         session.participantId,
@@ -377,7 +473,7 @@ export function attachRealtime(
 
       if (changed) {
         broadcastRoomPresence(io, roomService, session.roomId);
-        broadcastPeers(io, roomService, bridgeSockets, session.roomId);
+        broadcastPeers(io, roomService, session.roomId);
       }
     });
   });
@@ -441,7 +537,7 @@ function attachBridge(
   }
 
   attachSignalling(socket, roomId, io, roomService, bridgeSockets);
-  broadcastPeers(io, roomService, bridgeSockets, roomId);
+  broadcastPeers(io, roomService, roomId);
 
   socket.on(SOCKET_EVENTS.BRIDGE_STATE, (payload, ack) => {
     const parsed = bridgeStateReportSchema.safeParse(payload);
@@ -519,22 +615,15 @@ function attachSignalling(
 function broadcastPeers(
   io: TempassSocketServer,
   roomService: RoomService,
-  bridgeSockets: Map<string, Set<string>>,
   roomId: string,
 ): void {
-  const bridges = bridgeSockets.get(roomId);
-
-  if (!bridges || bridges.size === 0) {
-    return;
-  }
-
   const peers = roomService
     .getParticipantSocketIds(roomId)
     .map((socketId) => ({ socketId }));
 
-  for (const bridgeSocketId of bridges) {
-    io.to(bridgeSocketId).emit(SOCKET_EVENTS.ROOM_PEERS, { peers });
-  }
+  // Everyone in the room gets the list: the companion offers a captured tab to
+  // each participant, and participants offer a live tab to each other.
+  io.to(roomId).emit(SOCKET_EVENTS.ROOM_PEERS, { peers });
 }
 
 

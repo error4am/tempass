@@ -8,6 +8,8 @@ import type {
   PresenceUpdate,
   RoomSnapshot,
   ServerToClientEvents,
+  TabShareAck,
+  TabShareState,
 } from "@tempass/shared";
 import { io, type Socket } from "socket.io-client";
 
@@ -194,5 +196,58 @@ export function waitForDisconnect(socket: TestSocket): Promise<void> {
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
+  });
+}
+
+export function waitForShareState(
+  socket: TestSocket,
+  predicate: (state: TabShareState | null) => boolean = () => true,
+): Promise<TabShareState | null> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.off("share:state", onState);
+      reject(new Error("Timed out waiting for a matching share:state"));
+    }, DEFAULT_TIMEOUT_MS);
+
+    const onState = (state: TabShareState | null) => {
+      if (!predicate(state)) {
+        return;
+      }
+
+      clearTimeout(timer);
+      socket.off("share:state", onState);
+      resolve(state);
+    };
+
+    socket.on("share:state", onState);
+  });
+}
+
+export function sendShareStart(
+  socket: TestSocket,
+  payload: unknown,
+): Promise<TabShareAck> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Timed out waiting for share start acknowledgement"));
+    }, DEFAULT_TIMEOUT_MS);
+
+    socket.emit("share:start", payload, (ack) => {
+      clearTimeout(timer);
+      resolve(ack);
+    });
+  });
+}
+
+export function sendShareStop(socket: TestSocket): Promise<TabShareAck> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Timed out waiting for share stop acknowledgement"));
+    }, DEFAULT_TIMEOUT_MS);
+
+    socket.emit("share:stop", {}, (ack) => {
+      clearTimeout(timer);
+      resolve(ack);
+    });
   });
 }

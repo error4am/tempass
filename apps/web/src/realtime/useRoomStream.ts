@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { SOCKET_EVENTS } from "@tempass/shared";
+import { SOCKET_EVENTS, type TabShareState } from "@tempass/shared";
 
 import type { RoomSocket } from "./socket";
 
@@ -12,11 +12,21 @@ interface SignalMessage {
 interface DescriptionPayload {
   type: "offer" | "answer";
   sdp: string;
+  /** "share" marks a live-tab offer; the companion omits it. */
+  kind?: string;
 }
 
 interface CandidatePayload {
   type: "candidate";
   candidate: RTCIceCandidateInit;
+  kind?: string;
+}
+
+/** Which remote stream this hook listens for. */
+export type RoomStreamKind = "bridge" | "share";
+
+interface RoomStreamOptions {
+  kind?: RoomStreamKind;
 }
 
 function isDescription(value: unknown): value is DescriptionPayload {
@@ -39,11 +49,22 @@ function isCandidate(value: unknown): value is CandidatePayload {
   return (value as Partial<CandidatePayload>).type === "candidate";
 }
 
+function matchesKind(value: { kind?: string }, kind: RoomStreamKind): boolean {
+  return kind === "share" ? value.kind === "share" : value.kind !== "share";
+}
+
 /**
- * Receives the tab the presenter is sharing. The companion is always the
- * offerer, so the room only has to answer.
+ * Receives a remote stream offered to this participant.
+ *
+ * `bridge` is the source-site companion capturing a video tab; `share` is the
+ * other participant sharing their own tab. The offerer is always the sender,
+ * so the room only has to answer.
  */
-export function useRoomStream(socket: RoomSocket | null): MediaStream | null {
+export function useRoomStream(
+  socket: RoomSocket | null,
+  options: RoomStreamOptions = {},
+): MediaStream | null {
+  const kind = options.kind ?? "bridge";
   const [stream, setStream] = useState<MediaStream | null>(null);
 
   useEffect(() => {
@@ -52,17 +73,26 @@ export function useRoomStream(socket: RoomSocket | null): MediaStream | null {
     }
 
     let pc: RTCPeerConnection | null = null;
+    let offerFrom: string | null = null;
+    let offerKind: string | undefined;
     const pendingCandidates: RTCIceCandidateInit[] = [];
 
     const handleSignal = async ({ from, data }: SignalMessage) => {
-      if (isDescription(data) && data.type === "offer") {
+      if (isDescription(data) && data.type === "offer" && matchesKind(data, kind)) {
+        // Trickle candidates can beat the offer here. Only reset them when a
+        // different sender takes over, otherwise the connection never gathers.
+        if (offerFrom !== null && offerFrom !== from) {
+          pendingCandidates.length = 0;
+        }
+
+        offerFrom = from;
+        offerKind = data.kind;
         pc?.close();
 
         const connection = new RTCPeerConnection({
           iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
         });
         pc = connection;
-        pendingCandidates.length = 0;
 
         connection.ontrack = (event) => {
           const [incoming] = event.streams;
@@ -76,7 +106,11 @@ export function useRoomStream(socket: RoomSocket | null): MediaStream | null {
           if (event.candidate) {
             socket.emit(SOCKET_EVENTS.WEBRTC_SIGNAL, {
               to: from,
-              data: { type: "candidate", candidate: event.candidate.toJSON() },
+              data: {
+                kind: offerKind,
+                type: "candidate",
+                candidate: event.candidate.toJSON(),
+              },
             });
           }
         };
@@ -93,7 +127,7 @@ export function useRoomStream(socket: RoomSocket | null): MediaStream | null {
 
           socket.emit(SOCKET_EVENTS.WEBRTC_SIGNAL, {
             to: from,
-            data: { type: "answer", sdp: answer.sdp },
+            data: { kind: offerKind, type: "answer", sdp: answer.sdp },
           });
         } catch {
           setStream(null);
@@ -102,7 +136,11 @@ export function useRoomStream(socket: RoomSocket | null): MediaStream | null {
         return;
       }
 
-      if (isCandidate(data)) {
+      if (isCandidate(data) && matchesKind(data, kind)) {
+        if (offerFrom !== null && from !== offerFrom) {
+          return;
+        }
+
         if (!pc || !pc.remoteDescription) {
           pendingCandidates.push(data.candidate);
           return;
@@ -112,14 +150,35 @@ export function useRoomStream(socket: RoomSocket | null): MediaStream | null {
       }
     };
 
+    /**
+     * The presenter withdrawing the announcement is the only reliable "stop":
+     * a closed peer connection just freezes the last frame.
+     */
+    const handleShareState = (state: TabShareState | null) => {
+      if (!state) {
+        pc?.close();
+        pc = null;
+        setStream(null);
+      }
+    };
+
     socket.on(SOCKET_EVENTS.WEBRTC_SIGNAL, handleSignal);
+
+    if (kind === "share") {
+      socket.on(SOCKET_EVENTS.SHARE_STATE, handleShareState);
+    }
 
     return () => {
       socket.off(SOCKET_EVENTS.WEBRTC_SIGNAL, handleSignal);
+
+      if (kind === "share") {
+        socket.off(SOCKET_EVENTS.SHARE_STATE, handleShareState);
+      }
+
       pc?.close();
       setStream(null);
     };
-  }, [socket]);
+  }, [socket, kind]);
 
   return stream;
 }

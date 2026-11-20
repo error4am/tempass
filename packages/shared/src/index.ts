@@ -451,6 +451,64 @@ export const roomPeersSchema = z.object({
 
 export type RoomPeers = z.infer<typeof roomPeersSchema>;
 
+/**
+ * Live tab sharing.
+ *
+ * One participant presents a single captured tab (view only, no remote
+ * control). The server owns who is presenting so the two clients cannot both
+ * start a stream; the media itself never touches the server.
+ */
+export const tabShareSurfaces = ["browser", "window", "monitor", "unknown"] as const;
+
+export const tabShareSurfaceSchema = z.enum(tabShareSurfaces);
+
+export type TabShareSurface = z.infer<typeof tabShareSurfaceSchema>;
+
+export const tabShareStateSchema = z
+  .object({
+    presenterId: z.string().min(1),
+    presenterName: displayNameSchema,
+    /** Server clock, so both clients can show the same start time. */
+    startedAt: z.number().int().nonnegative(),
+    surface: tabShareSurfaceSchema,
+  })
+  .strict();
+
+export type TabShareState = z.infer<typeof tabShareStateSchema>;
+
+export const tabShareStartPayloadSchema = z
+  .object({
+    surface: tabShareSurfaceSchema,
+  })
+  .strict();
+
+export type TabShareStartPayload = z.infer<typeof tabShareStartPayloadSchema>;
+
+export const tabShareErrorCodes = [
+  "INVALID_INPUT",
+  "UNAUTHORIZED",
+  "SHARE_BUSY",
+] as const;
+
+export type TabShareErrorCode = (typeof tabShareErrorCodes)[number];
+
+export const tabShareAckSchema = z.discriminatedUnion("ok", [
+  z
+    .object({
+      ok: z.literal(true),
+      state: tabShareStateSchema.nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      ok: z.literal(false),
+      code: z.enum(tabShareErrorCodes),
+    })
+    .strict(),
+]);
+
+export type TabShareAck = z.infer<typeof tabShareAckSchema>;
+
 export const roomSnapshotSchema = z.object({
   room: publicRoomSchema,
   self: publicParticipantSchema,
@@ -528,6 +586,9 @@ export const SOCKET_EVENTS = {
   BRIDGE_COMMAND: "bridge:command",
   ROOM_PEERS: "room:peers",
   WEBRTC_SIGNAL: "webrtc:signal",
+  SHARE_START: "share:start",
+  SHARE_STOP: "share:stop",
+  SHARE_STATE: "share:state",
 } as const;
 
 export interface ClientToServerEvents {
@@ -541,6 +602,8 @@ export interface ClientToServerEvents {
   "bridge:state": (payload: unknown, ack?: (response: BridgeStateAck) => void) => void;
   "bridge:command": (payload: unknown, ack?: (response: { ok: boolean }) => void) => void;
   "webrtc:signal": (payload: unknown, ack?: (response: { ok: boolean }) => void) => void;
+  "share:start": (payload: unknown, ack?: (response: TabShareAck) => void) => void;
+  "share:stop": (payload: unknown, ack?: (response: TabShareAck) => void) => void;
 }
 
 export interface ServerToClientEvents {
@@ -552,6 +615,7 @@ export interface ServerToClientEvents {
   "bridge:command": (command: BridgeCommand) => void;
   "room:peers": (peers: RoomPeers) => void;
   "webrtc:signal": (message: { from: string; data: unknown }) => void;
+  "share:state": (state: TabShareState | null) => void;
 }
 
 export function roomInvitePath(roomId: string): string {

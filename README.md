@@ -12,8 +12,16 @@ Two playback modes:
   actually playing the video; it reports the media state to the room and applies play / pause /
   seek commands for everyone. Nothing is proxied or re-hosted.
 
+Plus one general-purpose mode:
+
+- **Live tab** — the presenter picks any browser tab and the other participant watches it
+  live, one way, with no remote control. Nothing is re-hosted; the picture is a peer-to-peer
+  tab capture, so it works for pages that are not video at all (documents, dashboards, games).
+  Desktop Chrome or Edge only, because `getDisplayMedia` tab capture is unavailable on mobile.
+
 The current stage implements **rooms, optional passwords, sessions, live participant presence,
-real-time chat, synchronized YouTube playback, and the source-site companion bridge**.
+real-time chat, synchronized YouTube playback, the source-site companion bridge, and one-way
+live tab sharing**.
 
 ## Requirements
 
@@ -157,6 +165,22 @@ participant IDs are random server-generated identifiers; clients cannot choose o
 - The web client prevents repeated submits while a send is pending, trims the draft, and only clears
   it after the server accepts the message. Shift+Enter inserts a newline; Enter sends.
 
+### Live tab sharing
+
+- A participant clicks **Share this tab** in the room, picks one tab in the browser's own
+  picker, and the other participant watches it. It is view-only: no clicks, scrolls, or seeks
+  are relayed, and the presenter's tab is the only thing captured.
+- The server only records *who is presenting* (`share:start` / `share:stop`, broadcast as
+  `share:state`). Media travels peer-to-peer over WebRTC; the server never sees it.
+- Only one participant can present at a time. A second `share:start` is refused with
+  `SHARE_BUSY`, and a viewer cannot stop someone else's share.
+- The presenter's capture survives switching to other tabs and in-app navigation. Reloading or
+  closing the room tab ends it, as does Chrome's own "Stop sharing" bar.
+- When the other participant disconnects, the capture stays alive but no frames are encoded;
+  sharing resumes automatically when they reconnect.
+- Audio is optional and comes from the shared tab only. If the presenter does not tick
+  **Share tab audio**, the room shows a warning instead of silently sending a silent stream.
+
 ## Security notes
 
 - API request bodies and socket payloads are validated with strict Zod schemas.
@@ -171,6 +195,12 @@ participant IDs are random server-generated identifiers; clients cannot choose o
 
 - YouTube only. Video selection and the official IFrame Player API integration come later.
 - Videos that disallow embedding, require sign-in, or are region-restricted cannot be watched.
+- Live tab sharing needs desktop Chrome or Edge; mobile browsers cannot capture a tab.
+- Live tab sharing is view-only. Co-browsing (letting the other person click) would need a
+  browser extension and is not implemented.
+- Only one tab is shared at a time, and the viewer does not follow the presenter to other tabs.
+- Signalling uses a public STUN server only. Without TURN, a share may fail to connect on
+  restrictive networks.
 - Tempass must not bypass DRM, advertisements, authentication, or access restrictions.
 - Room state and chat history are in memory on a single server. Restarting the server erases rooms,
   sessions, and all messages.

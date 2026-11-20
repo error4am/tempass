@@ -10,7 +10,9 @@ import type {
 
 import { playbackErrorMessage } from "../lib/roomErrors";
 import { parseYouTubeVideoId } from "../lib/youtube";
+import type { TabShareController } from "../realtime/useTabShare";
 import { ExternalStage } from "./ExternalStage";
+import { LiveTabStage } from "./LiveTabStage";
 import { YouTubePlayer } from "./YouTubePlayer";
 
 interface WatchStageProps {
@@ -18,8 +20,10 @@ interface WatchStageProps {
   bridge?: BridgeState | null;
   stream?: MediaStream | null;
   onBridgeCommand?: (command: BridgeCommand) => void;
-  /** Extra content shown under the "Share a tab" panel, e.g. setup steps. */
+  /** Extra content shown under the "Source video" panel, e.g. setup steps. */
   companionSlot?: ReactNode;
+  /** Live tab sharing, when the room offers it. */
+  share?: TabShareController | null;
   connected: boolean;
   clockOffsetMs?: number | null;
   onCommand: (command: PlaybackCommand) => Promise<PlaybackCommandAck>;
@@ -37,6 +41,7 @@ export function WatchStage({
   stream = null,
   onBridgeCommand,
   companionSlot = null,
+  share = null,
   connected,
   clockOffsetMs = null,
   onCommand,
@@ -44,9 +49,10 @@ export function WatchStage({
   const [videoInput, setVideoInput] = useState("");
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
-  const [tab, setTab] = useState<"youtube" | "external">("youtube");
+  const [tab, setTab] = useState<"youtube" | "external" | "live">("youtube");
   const mountedRef = useRef(true);
   const hadBridgeRef = useRef(false);
+  const hadShareRef = useRef(false);
 
   // Jump to the source panel the first time a companion connects, but never
   // yank the user back if they switch tabs themselves.
@@ -59,6 +65,18 @@ export function WatchStage({
     }
   }, [bridge]);
 
+  // Same for a live tab someone else starts presenting.
+  useEffect(() => {
+    const remoteShare = Boolean(share?.active && !share.presenting);
+
+    if (remoteShare && !hadShareRef.current) {
+      hadShareRef.current = true;
+      setTab("live");
+    } else if (!remoteShare) {
+      hadShareRef.current = false;
+    }
+  }, [share?.active, share?.presenting]);
+
   useEffect(() => {
     mountedRef.current = true;
 
@@ -69,6 +87,15 @@ export function WatchStage({
 
   const videoId = playback?.state.videoId ?? null;
   const playbackStatus = playback?.state.status ?? "idle";
+  const stageLabel = share?.active
+    ? share.presenting
+      ? "Sharing live"
+      : `Live · ${share.active.presenterName}`
+    : bridge
+      ? bridge.status === "playing"
+        ? "Playing"
+        : "Paused"
+      : PLAYBACK_STATUS_LABELS[playbackStatus];
 
   async function handleSelectVideo(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -127,9 +154,7 @@ export function WatchStage({
         <h2 id="room-stage-heading" className="text-sm font-semibold text-slate-200">
           Watch together
         </h2>
-        <span className="text-xs text-slate-500">
-          {bridge ? (bridge.status === "playing" ? "Playing" : "Paused") : PLAYBACK_STATUS_LABELS[playbackStatus]}
-        </span>
+        <span className="text-xs text-slate-500">{stageLabel}</span>
       </div>
 
       <div className="mt-3 flex gap-1 rounded-lg border border-white/10 bg-slate-950/60 p-1">
@@ -155,8 +180,28 @@ export function WatchStage({
               : "text-slate-500 hover:text-slate-300"
           }`}
         >
-          Share a tab
+          Source video
         </button>
+        {share ? (
+          <button
+            type="button"
+            aria-pressed={tab === "live"}
+            onClick={() => setTab("live")}
+            className={`h-8 flex-1 rounded-md px-3 text-xs font-semibold transition ${
+              tab === "live"
+                ? "bg-white/10 text-slate-100"
+                : "text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            Live tab
+            {share.active ? (
+              <span
+                aria-hidden="true"
+                className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-rose-400 align-middle"
+              />
+            ) : null}
+          </button>
+        ) : null}
       </div>
 
       {tab === "youtube" ? (
@@ -212,23 +257,27 @@ export function WatchStage({
         </div>
       )}
         </>
-      ) : bridge && onBridgeCommand ? (
-        <ExternalStage
-          bridge={bridge}
-          stream={stream}
-          connected={connected}
-          onCommand={onBridgeCommand}
-        />
-      ) : (
-        <div className="mt-4 flex aspect-video max-h-[46vh] w-full items-center justify-center rounded-xl border border-dashed border-white/10 bg-slate-900/50 px-6 text-center">
-          <div>
-            <p className="text-sm font-medium text-slate-300">Nothing shared yet</p>
-            <p className="mt-1 text-xs text-slate-500">
-              Start the companion on the site that is playing the video.
-            </p>
+      ) : tab === "external" ? (
+        bridge && onBridgeCommand ? (
+          <ExternalStage
+            bridge={bridge}
+            stream={stream}
+            connected={connected}
+            onCommand={onBridgeCommand}
+          />
+        ) : (
+          <div className="mt-4 flex aspect-video max-h-[46vh] w-full items-center justify-center rounded-xl border border-dashed border-white/10 bg-slate-900/50 px-6 text-center">
+            <div>
+              <p className="text-sm font-medium text-slate-300">Nothing shared yet</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Start the companion on the site that is playing the video.
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      ) : share ? (
+        <LiveTabStage share={share} connected={connected} />
+      ) : null}
 
       {tab === "external" ? companionSlot : null}
     </section>
