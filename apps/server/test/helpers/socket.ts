@@ -1,4 +1,5 @@
 import type {
+  BridgeState,
   ChatMessage,
   ChatSendAck,
   ClientToServerEvents,
@@ -199,11 +200,62 @@ export function delay(ms: number): Promise<void> {
   });
 }
 
+/** Connects as the companion script: it never counts as presence. */
+export function connectBridge(url: string, token: string): Promise<TestSocket> {
+  const socket: TestSocket = io(url, {
+    auth: { token, role: "bridge" },
+    transports: ["websocket"],
+    reconnection: false,
+    timeout: DEFAULT_TIMEOUT_MS,
+  });
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.disconnect();
+      reject(new Error("Timed out waiting for the bridge to connect"));
+    }, DEFAULT_TIMEOUT_MS);
+
+    socket.on("connect", () => {
+      clearTimeout(timer);
+      resolve(socket);
+    });
+
+    socket.on("connect_error", (error) => {
+      clearTimeout(timer);
+      socket.disconnect();
+      reject(error);
+    });
+  });
+}
+
+export function waitForBridgeState(
+  socket: TestSocket,
+  predicate: (state: BridgeState | null) => boolean = () => true,
+): Promise<BridgeState | null> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.off("bridge:state", onState);
+      reject(new Error("Timed out waiting for a matching bridge:state"));
+    }, DEFAULT_TIMEOUT_MS);
+
+    const onState = (state: BridgeState | null) => {
+      if (!predicate(state)) {
+        return;
+      }
+
+      clearTimeout(timer);
+      socket.off("bridge:state", onState);
+      resolve(state);
+    };
+
+    socket.on("bridge:state", onState);
+  });
+}
+
 export function waitForShareState(
   socket: TestSocket,
   predicate: (state: TabShareState | null) => boolean = () => true,
-): Promise<TabShareState | null> {
-  return new Promise((resolve, reject) => {
+): Promise<TabShareState | null> {  return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       socket.off("share:state", onState);
       reject(new Error("Timed out waiting for a matching share:state"));

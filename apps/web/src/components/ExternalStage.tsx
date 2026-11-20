@@ -34,6 +34,19 @@ function hostOf(url: string): string {
   }
 }
 
+/** A ticking "now" so the seek bar can advance between server reports. */
+function useNow(intervalMs: number): number {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), intervalMs);
+
+    return () => window.clearInterval(timer);
+  }, [intervalMs]);
+
+  return now;
+}
+
 /**
  * Stage for videos that cannot be embedded. The picture lives on the source
  * website (in the presenter's tab); this panel is the room's remote control.
@@ -45,6 +58,8 @@ export function ExternalStage({
   onCommand,
 }: ExternalStageProps) {
   const [seekPreview, setSeekPreview] = useState<number | null>(null);
+  const [pendingSeek, setPendingSeek] = useState<number | null>(null);
+  const [syncedAt, setSyncedAt] = useState(() => Date.now());
   const [needsGesture, setNeedsGesture] = useState(false);
   const [framesArrived, setFramesArrived] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -73,11 +88,44 @@ export function ExternalStage({
 
   const { status, positionSeconds, durationSeconds, source } = bridge;
   const playing = status === "playing";
-  const position = seekPreview ?? positionSeconds;
   const rangeMaximum = durationSeconds > 0 ? durationSeconds : 0;
+
+  // Advance the position locally between reports. Without this the seek bar
+  // only moves in 2s steps, and every play/pause command carries a position
+  // that is up to 2s stale — which makes the source tab seek backwards.
+  const now = useNow(250);
+  const elapsed =
+    playing && pendingSeek === null
+      ? Math.max(0, (now - syncedAt) / 1_000)
+      : 0;
+  const livePosition = pendingSeek ?? positionSeconds + elapsed;
+  const position = seekPreview ?? livePosition;
+
+  // A report close to the optimistic target confirms the seek; anything else
+  // (or four seconds of silence) releases it so the truth wins again.
+  useEffect(() => {
+    setSyncedAt(Date.now());
+    setPendingSeek((current) =>
+      current === null || Math.abs(positionSeconds - current) <= 2
+        ? null
+        : current,
+    );
+  }, [positionSeconds, status, bridge.updatedAt]);
+
+  useEffect(() => {
+    if (pendingSeek === null) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setPendingSeek(null), 4_000);
+
+    return () => window.clearTimeout(timer);
+  }, [pendingSeek]);
 
   function commitSeek(value: number) {
     setSeekPreview(null);
+    setPendingSeek(value);
+    setSyncedAt(Date.now());
     onCommand({ action: "seek", positionSeconds: value });
   }
 
@@ -160,7 +208,7 @@ export function ExternalStage({
             onClick={() =>
               onCommand({
                 action: playing ? "pause" : "play",
-                positionSeconds,
+                positionSeconds: Math.round(livePosition),
               })
             }
             disabled={!connected}

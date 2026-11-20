@@ -201,6 +201,10 @@ participant IDs are random server-generated identifiers; clients cannot choose o
 - Only one tab is shared at a time, and the viewer does not follow the presenter to other tabs.
 - Signalling uses a public STUN server only. Without TURN, a share may fail to connect on
   restrictive networks.
+- Some source sites ship a Content-Security-Policy that only allows `https:` scripts and
+  connections. A deployed (https) Tempass works, but pointing the companion at a local
+  `http://localhost` API from such a site is blocked by the browser. Use an https tunnel or a
+  site without a strict policy when testing the companion against one of those.
 - Tempass must not bypass DRM, advertisements, authentication, or access restrictions.
 - Room state and chat history are in memory on a single server. Restarting the server erases rooms,
   sessions, and all messages.

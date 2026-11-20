@@ -91,6 +91,12 @@ export function attachRealtime(
   const bridges = new Map<string, BridgeState>();
   /** Bridge sockets per room, so participants can be offered the captured tab. */
   const bridgeSockets = new Map<string, Set<string>>();
+  /**
+   * Which bridge owns the room's reported state. Two companions in one room
+   * (one per participant) would otherwise overwrite each other every 2s, which
+   * makes the room's play/pause and seek bar flicker.
+   */
+  const bridgeOwners = new Map<string, string>();
   /** Who is presenting a live tab in each room, if anyone. */
   const shares = new Map<string, TabShareState>();
 
@@ -123,7 +129,15 @@ export function attachRealtime(
     }
 
     if (socket.data.role === "bridge") {
-      attachBridge(socket, session, io, bridges, bridgeSockets, roomService);
+      attachBridge(
+        socket,
+        session,
+        io,
+        bridges,
+        bridgeSockets,
+        bridgeOwners,
+        roomService,
+      );
       return;
     }
 
@@ -520,6 +534,7 @@ function attachBridge(
   io: TempassSocketServer,
   bridges: Map<string, BridgeState>,
   bridgeSockets: Map<string, Set<string>>,
+  bridgeOwners: Map<string, string>,
   roomService: RoomService,
 ): void {
   const roomId = session.roomId;
@@ -529,6 +544,10 @@ function attachBridge(
   const roomBridges = bridgeSockets.get(roomId) ?? new Set<string>();
   roomBridges.add(socket.id);
   bridgeSockets.set(roomId, roomBridges);
+
+  if (!bridgeOwners.has(roomId)) {
+    bridgeOwners.set(roomId, socket.id);
+  }
 
   const existing = bridges.get(roomId);
 
@@ -544,6 +563,12 @@ function attachBridge(
 
     if (!parsed.success) {
       ack?.({ ok: false, code: "INVALID_INPUT" });
+      return;
+    }
+
+    // Only the owner speaks for the room. Other companions still receive and
+    // apply commands, they just cannot overwrite the canonical state.
+    if (bridgeOwners.get(roomId) !== socket.id) {
       return;
     }
 
@@ -563,11 +588,21 @@ function attachBridge(
     const set = bridgeSockets.get(roomId);
     set?.delete(socket.id);
 
+    if (bridgeOwners.get(roomId) === socket.id) {
+      bridgeOwners.delete(roomId);
+      const next = set ? [...set][0] : undefined;
+
+      if (next) {
+        bridgeOwners.set(roomId, next);
+      }
+    }
+
     if (set && set.size > 0) {
       return;
     }
 
     bridgeSockets.delete(roomId);
+    bridgeOwners.delete(roomId);
 
     if (!bridges.has(roomId)) {
       return;

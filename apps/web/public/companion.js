@@ -85,6 +85,7 @@
   var video = null;
   var applying = false;
   var emitTimer = 0;
+  var reportTimer = 0;
   var scanTimer = 0;
 
   var sharedStream = null;
@@ -190,16 +191,34 @@
   /* ------------------------------------------------------------------ *
    * Video discovery + state reporting
    * ------------------------------------------------------------------ */
+  function videoArea(candidate) {
+    return (
+      (candidate.clientWidth || candidate.videoWidth || 0) *
+      (candidate.clientHeight || candidate.videoHeight || 0)
+    );
+  }
+
   function pickVideo() {
+    // Stay on the element we already own. Some players mount teasers, ads or
+    // hidden preloads that briefly win the size race; hopping between them
+    // makes the room's play/pause and seek bar jump. Only rescan once the bound
+    // element is detached, hidden, or has no size.
+    if (video && video.isConnected && videoArea(video) > 0) {
+      return video;
+    }
+
     var videos = [].slice.call(document.querySelectorAll("video"));
     var best = null;
     var bestScore = -1;
 
     for (var i = 0; i < videos.length; i += 1) {
       var candidate = videos[i];
-      var score =
-        (candidate.clientWidth || candidate.videoWidth || 0) *
-        (candidate.clientHeight || candidate.videoHeight || 0);
+
+      if (!candidate.isConnected) {
+        continue;
+      }
+
+      var score = videoArea(candidate);
 
       if (score > bestScore) {
         bestScore = score;
@@ -245,7 +264,11 @@
   }
 
   function reportSoon(delay) {
-    window.setTimeout(report, delay || 0);
+    // Collapse bursts of play/pause/seek events into one report. Players often
+    // fire pause → seek → play while seeking; forwarding every step makes the
+    // room's button and slider flicker.
+    window.clearTimeout(reportTimer);
+    reportTimer = window.setTimeout(report, delay || 0);
   }
 
   function bindVideo(next) {
@@ -258,7 +281,7 @@
     video = next;
 
     var onLocal = function () {
-      reportSoon(60);
+      reportSoon(250);
     };
 
     next.addEventListener("play", onLocal);
@@ -567,6 +590,7 @@
   function destroy() {
     window.clearInterval(emitTimer);
     window.clearInterval(scanTimer);
+    window.clearTimeout(reportTimer);
     stopSharing();
 
     if (socket) {
