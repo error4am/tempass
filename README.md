@@ -170,6 +170,9 @@ participant IDs are random server-generated identifiers; clients cannot choose o
 - A participant clicks **Share this tab** in the room, picks one tab in the browser's own
   picker, and the other participant watches it. It is view-only: no clicks, scrolls, or seeks
   are relayed, and the presenter's tab is the only thing captured.
+- The presenter sees a live, muted preview of the same capture in the room, so they can confirm
+  which tab and what framing the other person is receiving. It is muted because the shared tab
+  already plays its audio on the presenter's machine.
 - The server only records *who is presenting* (`share:start` / `share:stop`, broadcast as
   `share:state`). Media travels peer-to-peer over WebRTC; the server never sees it.
 - Only one participant can present at a time. A second `share:start` is refused with

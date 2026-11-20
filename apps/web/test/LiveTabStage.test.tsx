@@ -13,6 +13,7 @@ function controller(
     presenting: false,
     status: "idle",
     stream: null,
+    previewStream: null,
     surface: "unknown",
     audioMissing: false,
     error: null,
@@ -88,6 +89,75 @@ describe("LiveTabStage", () => {
     );
 
     expect(screen.getByText("Nobody is watching right now", { exact: false })).toBeTruthy();
+  });
+
+  it("attaches the preview when the panel mounts after the capture starts", () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, "play")
+      .mockImplementation(() => Promise.resolve());
+    const previewStream = { getTracks: () => [] } as unknown as MediaStream;
+
+    // The capture exists before the server confirms, so the video mounts late.
+    const { rerender } = render(
+      <LiveTabStage share={controller({ previewStream })} connected />,
+    );
+    expect(document.querySelector("video")).toBeNull();
+
+    rerender(
+      <LiveTabStage
+        share={controller({
+          previewStream,
+          presenting: true,
+          status: "live",
+          surface: "browser",
+          active: {
+            presenterId: "me",
+            presenterName: "Alex",
+            startedAt: 1_000,
+            surface: "browser",
+          },
+        })}
+        connected
+      />,
+    );
+
+    const video = document.querySelector("video") as HTMLVideoElement | null;
+
+    expect(video?.srcObject).toBe(previewStream);
+
+    play.mockRestore();
+  });
+
+  it("gives the presenter a muted preview of their own capture", () => {
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, "play")
+      .mockImplementation(() => Promise.resolve());
+    const previewStream = { getTracks: () => [] } as unknown as MediaStream;
+
+    render(
+      <LiveTabStage
+        share={controller({
+          presenting: true,
+          status: "live",
+          surface: "browser",
+          previewStream,
+          active: {
+            presenterId: "me",
+            presenterName: "Alex",
+            startedAt: 1_000,
+            surface: "browser",
+          },
+        })}
+        connected
+      />,
+    );
+
+    const video = document.querySelector("video") as HTMLVideoElement | null;
+
+    expect(video).not.toBeNull();
+    expect(video?.muted).toBe(true);
+
+    play.mockRestore();
   });
 
   it("names the presenter and the surface for the viewer", () => {

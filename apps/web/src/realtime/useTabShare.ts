@@ -31,6 +31,8 @@ export interface TabShareController {
   status: TabShareStatus;
   /** The other participant's tab, for the viewer. */
   stream: MediaStream | null;
+  /** The local capture, so the presenter sees what the viewer receives. */
+  previewStream: MediaStream | null;
   /** What Chrome reported the presenter picked: a tab, window, or screen. */
   surface: TabShareSurface;
   /** The capture came without audio (the "Share tab audio" box was unticked). */
@@ -105,6 +107,7 @@ export function useTabShare(
   const [active, setActive] = useState<TabShareState | null>(null);
   const [status, setStatus] = useState<TabShareStatus>("idle");
   const [surface, setSurface] = useState<TabShareSurface>("unknown");
+  const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
   const [audioMissing, setAudioMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -256,6 +259,7 @@ export function useTabShare(
 
       capture = null;
       sharing = false;
+      setPreviewStream(null);
       setAudioMissing(false);
       setStatus("idle");
     }
@@ -337,6 +341,7 @@ export function useTabShare(
       sharing = true;
       currentSurface = nextSurface;
       setSurface(nextSurface);
+      setPreviewStream(next);
       setAudioMissing(next.getAudioTracks().length === 0);
 
       // Browser "Stop sharing" bar ends the track; treat it as a full stop.
@@ -498,6 +503,7 @@ export function useTabShare(
     presenting: active?.presenterId === selfId,
     status,
     stream,
+    previewStream,
     surface,
     audioMissing,
     error,

@@ -21,6 +21,7 @@ const SURFACE_LABELS = {
  */
 export function LiveTabStage({ share, connected }: LiveTabStageProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const previewRef = useRef<HTMLVideoElement | null>(null);
   const [needsGesture, setNeedsGesture] = useState(false);
   const [framesArrived, setFramesArrived] = useState(false);
 
@@ -45,6 +46,30 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
       element.srcObject = null;
     };
   }, [share.stream]);
+
+  // The presenter's own preview of the capture. Always muted: the shared tab
+  // already plays its audio on this machine, so unmuting would echo.
+  useEffect(() => {
+    const element = previewRef.current;
+
+    if (!element || !share.previewStream) {
+      return;
+    }
+
+    element.srcObject = share.previewStream;
+
+    const played = element.play();
+
+    if (played && typeof played.catch === "function") {
+      played.catch(() => {});
+    }
+
+    return () => {
+      element.srcObject = null;
+    };
+    // `presenting` is part of the key because the capture exists before the
+    // server confirms it, and the <video> only mounts once confirmation lands.
+  }, [share.previewStream, share.presenting]);
 
   const viewer = share.active !== null && !share.presenting;
   const presenter = share.presenting;
@@ -126,38 +151,57 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
   }
 
   if (presenter) {
+    const statusText =
+      share.status === "waiting"
+        ? "Nobody is watching right now — nothing is being sent."
+        : share.status === "connecting"
+          ? "Connecting to the other participant…"
+          : share.status === "starting"
+            ? "Starting the preview…"
+            : "They see exactly this preview.";
+
     return (
       <div className="mt-4">
-        <div className="relative flex aspect-video max-h-[46vh] w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-xl border border-rose-400/30 bg-rose-500/[0.06] px-6 text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-rose-400/40 bg-rose-500/20 px-3 py-1 text-xs font-semibold text-rose-100">
+        <div className="relative aspect-video max-h-[46vh] w-full overflow-hidden rounded-xl border border-rose-400/30 bg-black">
+          {share.previewStream ? (
+            <video
+              ref={previewRef}
+              className="h-full w-full object-contain"
+              playsInline
+              autoPlay
+              muted
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-xs text-slate-400">
+              Starting the preview…
+            </div>
+          )}
+
+          <span className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full border border-rose-400/40 bg-slate-950/80 px-3 py-1 text-xs font-semibold text-rose-100">
             <span
               aria-hidden="true"
               className="h-1.5 w-1.5 rounded-full bg-rose-400"
             />
-            LIVE
+            LIVE · you
           </span>
 
-          <div>
-            <p className="text-sm font-medium text-slate-100">
-              You are sharing {SURFACE_LABELS[share.surface]}.
-            </p>
-            <p className="mt-1 max-w-sm text-xs text-slate-400">
-              {share.status === "waiting"
-                ? "Nobody is watching right now, so no video is being sent. It resumes on its own when they come back."
-                : share.status === "connecting"
-                  ? "Connecting to the other participant… the picture appears as soon as the link is up."
-                  : "They see exactly this tab. Switch to another tab and they stay on this one."}
-            </p>
+          <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-2 bg-slate-950/85 px-3 py-2">
+            <p className="min-w-0 text-xs text-slate-300">{statusText}</p>
+            <button
+              type="button"
+              onClick={share.stop}
+              className="h-8 shrink-0 rounded-lg bg-rose-500 px-3 text-xs font-semibold text-white transition hover:bg-rose-400"
+            >
+              Stop sharing
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={share.stop}
-            className="h-9 rounded-lg bg-rose-500 px-4 text-xs font-semibold text-white transition hover:bg-rose-400"
-          >
-            Stop sharing
-          </button>
         </div>
+
+        <p className="mt-3 text-xs text-slate-500">
+          You are sharing {SURFACE_LABELS[share.surface]}. The preview is muted
+          here; the other person hears the tab audio. Switching tabs does not
+          change what they see.
+        </p>
 
         {share.audioMissing ? (
           <p
