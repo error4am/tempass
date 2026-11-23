@@ -220,6 +220,7 @@ describe("RoomService", () => {
         videoId: null,
         status: "idle",
         positionSeconds: 0,
+        rate: 1,
         updatedAt: 1_000,
         revision: 0,
       };
@@ -246,6 +247,7 @@ describe("RoomService", () => {
         videoId,
         status: "paused",
         positionSeconds: 0,
+        rate: 1,
         updatedAt: 1_500,
         revision: 1,
       });

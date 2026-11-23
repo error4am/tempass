@@ -69,6 +69,36 @@ describe("playback synchronization helpers", () => {
     expect(projectPlaybackPosition(playing, Number.NaN)).toBe(12.5);
   });
 
+  it("scales projection by the shared playback rate", () => {
+    const doubleSpeed = playbackState({
+      status: "playing",
+      positionSeconds: 10,
+      rate: 2,
+      updatedAt: 1_000_000,
+    });
+
+    expect(projectPlaybackPosition(doubleSpeed, 1_000_000)).toBe(10);
+    expect(projectPlaybackPosition(doubleSpeed, 1_003_000)).toBe(16);
+
+    const halfSpeed = playbackState({
+      status: "playing",
+      positionSeconds: 10,
+      rate: 0.5,
+      updatedAt: 1_000_000,
+    });
+
+    expect(projectPlaybackPosition(halfSpeed, 1_004_000)).toBe(12);
+
+    // A missing or broken rate must fall back to 1×.
+    const missing = playbackState({
+      status: "playing",
+      positionSeconds: 10,
+      updatedAt: 1_000_000,
+    });
+
+    expect(projectPlaybackPosition(missing, 1_002_000)).toBe(12);
+  });
+
   it("clamps negative projected positions and does not mutate state", () => {
     const playing = playbackState({
       status: "playing",

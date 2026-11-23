@@ -130,6 +130,50 @@ describe("room playback over Socket.IO", () => {
     }
   });
 
+  it("changes the playback rate for the room without touching status", async () => {
+    let now = 1_000_000;
+    const test = await setup({ now: () => now });
+    const { first, second } = await createRoomWithTwoParticipants(test);
+
+    await sendPlaybackCommand(first.socket, { action: "select", videoId });
+    await sendPlaybackCommand(first.socket, {
+      action: "play",
+      videoId,
+      positionSeconds: 10,
+    });
+
+    now += 500;
+    const firstUpdate = waitForPlaybackState(
+      first.socket,
+      (update) => update.state.rate === 2,
+    );
+    const secondUpdate = waitForPlaybackState(
+      second.socket,
+      (update) => update.state.rate === 2,
+    );
+    const ack = await sendPlaybackCommand(first.socket, {
+      action: "rate",
+      videoId,
+      positionSeconds: 15,
+      rate: 2,
+    });
+
+    expectAccepted(ack);
+    expect(ack.state).toMatchObject({
+      videoId,
+      status: "playing",
+      positionSeconds: 15,
+      rate: 2,
+      updatedAt: now,
+    });
+
+    const [senderUpdate, peerUpdate] = await Promise.all([firstUpdate, secondUpdate]);
+
+    expect(senderUpdate).toEqual({ state: ack.state, serverTime: ack.serverTime });
+    expect(peerUpdate).toEqual(senderUpdate);
+    expect(test.runtime.roomService.getPlayback(first.snapshot.room.id)?.rate).toBe(2);
+  });
+
   it("rejects invalid payloads without mutating or broadcasting playback", async () => {
     const test = await setup();
     const { first, second } = await createRoomWithTwoParticipants(test);

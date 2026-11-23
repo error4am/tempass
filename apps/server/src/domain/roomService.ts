@@ -52,6 +52,7 @@ function createIdlePlayback(now: number): PlaybackState {
     videoId: null,
     status: "idle",
     positionSeconds: 0,
+    rate: 1,
     updatedAt: now,
     revision: 0,
   };
@@ -217,6 +218,7 @@ export class RoomService {
       videoId: parsedVideoId.data,
       status: "paused",
       positionSeconds: 0,
+      rate: 1,
       updatedAt: this.now(),
       revision: current.room.playback.revision + 1,
     };
@@ -263,6 +265,7 @@ export class RoomService {
             ? "paused"
             : playback.status,
       positionSeconds: update.positionSeconds,
+      rate: update.action === "rate" ? update.rate : (playback.rate ?? 1),
       updatedAt: this.now(),
       revision: playback.revision + 1,
     };

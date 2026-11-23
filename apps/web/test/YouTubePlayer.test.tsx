@@ -44,6 +44,7 @@ class FakePlayer {
   currentTime = 0;
   duration = 0;
   muted = false;
+  playbackRate = 1;
   videoId: string | null;
 
   playVideo = vi.fn(() => {
@@ -77,6 +78,10 @@ class FakePlayer {
   getCurrentTime = vi.fn(() => this.currentTime);
   getDuration = vi.fn(() => this.duration);
   getPlayerState = vi.fn(() => this.state);
+  setPlaybackRate = vi.fn((rate: number) => {
+    this.playbackRate = rate;
+  });
+  getPlaybackRate = vi.fn(() => this.playbackRate);
   destroy = vi.fn();
 
   constructor(_element: HTMLElement, options: FakePlayerOptions) {
@@ -279,6 +284,43 @@ describe("YouTubePlayer", () => {
     expect(player.unMute).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Mute" })).toBeTruthy();
     expect(onCommand).not.toHaveBeenCalled();
+  });
+
+  it("shares the playback speed with the room and applies the canonical rate", async () => {
+    const onCommand = createCommandHandler();
+    const { player, rerender } = await renderPlayer(playbackUpdate(), onCommand);
+
+    fireEvent.change(screen.getByLabelText("Playback speed"), {
+      target: { value: "2" },
+    });
+
+    await waitFor(() => {
+      expect(onCommand).toHaveBeenCalledWith({
+        action: "rate",
+        videoId: VIDEO_ID,
+        positionSeconds: 0,
+        rate: 2,
+      });
+    });
+
+    // The room is authoritative: the player only speeds up when the canonical
+    // state says so.
+    expect(player.setPlaybackRate).not.toHaveBeenCalled();
+
+    rerender(
+      <YouTubePlayer
+        playback={playbackUpdate(
+          { status: "playing", rate: 2, revision: 2 },
+          1_000,
+        )}
+        connected
+        onCommand={onCommand}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(player.setPlaybackRate).toHaveBeenCalledWith(2);
+    });
   });
 
   it("applies remote play and pause updates without issuing commands", async () => {

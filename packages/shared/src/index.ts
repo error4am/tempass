@@ -213,11 +213,25 @@ export const playbackPositionSchema = z
 
 export const playbackStatusSchema = z.enum(["idle", "paused", "playing"]);
 
+/** The rates the player offers; YouTube accepts values in this range. */
+export const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
+
+export const MIN_PLAYBACK_RATE = 0.25;
+export const MAX_PLAYBACK_RATE = 2;
+
+export const playbackRateSchema = z
+  .number()
+  .finite()
+  .min(MIN_PLAYBACK_RATE)
+  .max(MAX_PLAYBACK_RATE);
+
 export const playbackStateSchema = z
   .object({
     videoId: youtubeVideoIdSchema.nullable(),
     status: playbackStatusSchema,
     positionSeconds: playbackPositionSchema,
+    /** Absent means 1×; the server always writes it. */
+    rate: playbackRateSchema.optional(),
     updatedAt: z.number().int().nonnegative(),
     revision: z.number().int().nonnegative(),
   })
@@ -265,10 +279,20 @@ const seekPlaybackCommandSchema = z
   })
   .strict();
 
+const ratePlaybackCommandSchema = z
+  .object({
+    action: z.literal("rate"),
+    videoId: youtubeVideoIdSchema,
+    positionSeconds: playbackPositionSchema,
+    rate: playbackRateSchema,
+  })
+  .strict();
+
 export const playbackUpdateCommandSchema = z.discriminatedUnion("action", [
   playPlaybackCommandSchema,
   pausePlaybackCommandSchema,
   seekPlaybackCommandSchema,
+  ratePlaybackCommandSchema,
 ]);
 
 export const playbackCommandSchema = z.discriminatedUnion("action", [
@@ -276,6 +300,7 @@ export const playbackCommandSchema = z.discriminatedUnion("action", [
   playPlaybackCommandSchema,
   pausePlaybackCommandSchema,
   seekPlaybackCommandSchema,
+  ratePlaybackCommandSchema,
 ]);
 
 export type PlaybackUpdateCommand = z.infer<typeof playbackUpdateCommandSchema>;

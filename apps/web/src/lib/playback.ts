@@ -27,7 +27,10 @@ export function projectPlaybackPosition(
     return storedPosition;
   }
 
-  return Math.max(0, storedPosition + elapsedMs / 1_000);
+  const rate =
+    Number.isFinite(state.rate) && (state.rate ?? 0) > 0 ? (state.rate as number) : 1;
+
+  return Math.max(0, storedPosition + (elapsedMs / 1_000) * rate);
 }
 
 export function calculatePlaybackDrift(

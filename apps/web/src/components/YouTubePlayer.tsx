@@ -9,6 +9,7 @@ import {
 
 import {
   MAX_PLAYBACK_POSITION_SECONDS,
+  PLAYBACK_RATES,
   type PlaybackCommand,
   type PlaybackCommandAck,
   type PlaybackUpdate,
@@ -124,6 +125,26 @@ function seekPlayer(player: YouTubePlayerInstance, positionSeconds: number): voi
   try {
     player.seekTo(clampPosition(positionSeconds), true);
   } catch {}
+}
+
+/** The room's speed is authoritative; nudge the player only when it differs. */
+function applyPlaybackRate(player: YouTubePlayerInstance, rate: number): void {
+  const nextRate =
+    Number.isFinite(rate) && rate > 0 ? rate : 1;
+
+  try {
+    if (Math.abs(player.getPlaybackRate() - nextRate) < 0.01) {
+      return;
+    }
+  } catch {
+    /* fall through and try to set it */
+  }
+
+  try {
+    player.setPlaybackRate(nextRate);
+  } catch {
+    /* some videos only allow 1× */
+  }
 }
 
 export function YouTubePlayer({
@@ -296,6 +317,9 @@ export function YouTubePlayer({
         return;
       }
 
+      // Keep the player at the room's speed even after a seek or a rebuffer.
+      applyPlaybackRate(player, state.rate ?? 1);
+
       // If the player is already playing and the canonical state changed to paused
       // mid-transition, do not spuriously attempt to pause. The
       // applyCanonicalPlayback effect is responsible for triggering pause; a
@@ -395,6 +419,8 @@ export function YouTubePlayer({
           pausePlayer(player);
         }
 
+        applyPlaybackRate(player, state.rate ?? 1);
+
         return;
       }
 
@@ -403,6 +429,8 @@ export function YouTubePlayer({
       }
 
       appliedRevisionRef.current = state.revision;
+
+      applyPlaybackRate(player, state.rate ?? 1);
 
       const playerState = readPlayerState(player);
       const buffering = playerState === PLAYER_STATE_BUFFERING;
@@ -824,6 +852,29 @@ export function YouTubePlayer({
     } catch {}
   }
 
+  function handleRateChange(event: ChangeEvent<HTMLSelectElement>) {
+    const nextRate = Number(event.currentTarget.value);
+    const videoId = playbackRef.current.state.videoId;
+
+    if (!videoId || !connected || !Number.isFinite(nextRate)) {
+      return;
+    }
+
+    const player = playerRef.current;
+    const positionSeconds = clampPosition(
+      player
+        ? readPlayerPosition(player)
+        : expectedPositionFor(playbackRef.current),
+    );
+
+    void runCommand({
+      action: "rate",
+      videoId,
+      positionSeconds,
+      rate: nextRate,
+    });
+  }
+
   function handleJoinPlayback() {
     const player = playerRef.current;
 
@@ -842,6 +893,7 @@ export function YouTubePlayer({
       setCurrentTime(targetPosition);
     }
 
+    applyPlaybackRate(player, playbackRef.current.state.rate ?? 1);
     attemptPlay();
   }
 
@@ -925,6 +977,10 @@ export function YouTubePlayer({
 
   const videoId = playback.state.videoId;
   const rangeMaximum = duration > 0 ? duration : MAX_PLAYBACK_POSITION_SECONDS;
+  const rate = playback.state.rate ?? 1;
+  const rateOptions = (PLAYBACK_RATES as readonly number[]).includes(rate)
+    ? PLAYBACK_RATES
+    : [...PLAYBACK_RATES, rate].sort((a, b) => a - b);
   const displayPosition = seekPreview ?? currentTime;
   const controlsDisabled =
     !connected ||
@@ -1038,6 +1094,28 @@ export function YouTubePlayer({
           >
             {muted ? "Unmute" : "Mute"}
           </button>
+
+          <label htmlFor="playback-rate" className="sr-only">
+            Playback speed
+          </label>
+          <select
+            id="playback-rate"
+            value={rate}
+            onChange={handleRateChange}
+            disabled={controlsDisabled}
+            title="Playback speed (shared with everyone)"
+            className="h-9 shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {rateOptions.map((option) => (
+              <option
+                key={option}
+                value={option}
+                className="bg-slate-900 text-slate-100"
+              >
+                {option}×
+              </option>
+            ))}
+          </select>
 
           <span className="shrink-0 font-mono text-xs tabular-nums text-slate-400">
             {formatTime(displayPosition)} / {duration > 0 ? formatTime(duration) : "--:--"}
