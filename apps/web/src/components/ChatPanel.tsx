@@ -22,6 +22,7 @@ import {
 import { isEmojiOnlyMessage } from "../lib/emoji";
 import { chatErrorMessage, mediaErrorMessage } from "../lib/roomErrors";
 import { EmojiPicker } from "./EmojiPicker";
+import { ChatBubbleIcon, ImageIcon, SendIcon, SmileIcon } from "./Icons";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -430,19 +431,32 @@ export function ChatPanel({
   return (
     <section
       aria-labelledby="chat-heading"
-      className="flex h-[min(32rem,70dvh)] min-h-0 min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:h-[28rem]"
+      className="flex h-[min(34rem,72dvh)] min-h-0 min-w-0 flex-col rounded-xl border border-white/[0.08] bg-[#1c1b1d] shadow-2xl shadow-black/30 lg:h-full"
     >
-      <div className="flex min-w-0 shrink-0 items-baseline justify-between gap-3">
-        <h2 id="chat-heading" className="text-sm font-semibold text-slate-200">
-          Chat
-        </h2>
-        <span className="shrink-0 text-xs text-slate-500">Recent messages only</span>
+      <div className="flex min-w-0 shrink-0 items-center justify-between gap-3 rounded-t-xl border-b border-white/[0.06] bg-[#201f22]/80 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="relative shrink-0">
+            <ChatBubbleIcon className="h-4 w-4 text-[#ff516a]" />
+            <span
+              aria-hidden="true"
+              className={`absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full ${
+                connected ? "bg-[#4edea3]" : "bg-amber-300"
+              }`}
+            />
+          </div>
+          <h2 id="chat-heading" className="font-display text-sm font-semibold text-[#e5e1e4]">
+            Chat
+          </h2>
+        </div>
+        <span className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-[#8d8487]">
+          Recent messages only
+        </span>
       </div>
 
       {!connected ? (
         <p
           role="status"
-          className="mt-3 shrink-0 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100"
+          className="mx-3 mt-3 shrink-0 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100"
         >
           Chat is paused until the room connection is ready.
         </p>
@@ -454,59 +468,68 @@ export function ChatPanel({
         role="log"
         aria-live="polite"
         aria-label="Chat messages"
-        className="mt-3 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-xl border border-white/5 bg-slate-950/40 p-3"
+        className="chat-scroll min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-[#131315]/70 px-3.5 py-3"
       >
         {messages.length === 0 ? (
-          <p className="px-1 py-6 text-center text-sm text-slate-500">
+          <p className="px-1 py-8 text-center text-sm text-[#8d8487]">
             No messages yet. Say hello.
           </p>
         ) : (
-          <ol className="min-w-0 space-y-3">
+          <ol className="flex min-w-0 flex-col gap-3">
             {messages.map((message) => {
               const isSelf = message.senderId === selfId;
 
               return (
                 <li
                   key={message.id}
-                  className={`min-w-0 rounded-xl border px-3 py-2 ${
-                    isSelf
-                      ? "border-rose-400/15 bg-rose-400/[0.06]"
-                      : "border-white/5 bg-white/[0.03]"
-                  }`}
+                  data-sender={isSelf ? "self" : "other"}
+                  className={`flex min-w-0 flex-col ${isSelf ? "items-end" : "items-start"}`}
                 >
-                  <div className="flex min-w-0 items-baseline justify-between gap-3">
-                    <span className="min-w-0 truncate text-xs font-semibold text-slate-200">
+                  <div className="mb-1 flex max-w-[85%] min-w-0 items-baseline gap-2 px-1">
+                    <span
+                      className={`min-w-0 truncate text-xs font-medium ${
+                        isSelf ? "text-[#ffb2b7]" : "text-[#e5e1e4]"
+                      }`}
+                    >
                       {message.senderName}
                       {isSelf ? (
-                        <span className="ml-1 font-normal text-slate-500">(you)</span>
+                        <span className="ml-1 font-normal text-[#8d8487]">(you)</span>
                       ) : null}
                     </span>
                     <time
                       dateTime={message.sentAt}
                       title={message.sentAt}
-                      className="shrink-0 text-[11px] text-slate-500"
+                      className="shrink-0 font-mono text-[10px] text-[#8d8487]"
                     >
                       {formatTimestamp(message.sentAt)}
                     </time>
                   </div>
-                  {message.media ? (
-                    <MessageImage
-                      media={message.media}
-                      loadImageUrl={loadImageUrl}
-                      onOpen={setViewer}
-                    />
-                  ) : null}
-                  {message.text ? (
-                    <p
-                      className={`mt-1 min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-slate-300 ${
-                        isEmojiOnlyMessage(message.text)
-                          ? "text-3xl leading-9"
-                          : "text-sm leading-6"
-                      }`}
-                    >
-                      {message.text}
-                    </p>
-                  ) : null}
+                  <div
+                    className={`max-w-[85%] min-w-0 rounded-2xl border px-3.5 py-2 shadow-sm ${
+                      isSelf
+                        ? "rounded-tr-sm border-[#ff516a]/30 bg-[#ff516a]/18 text-[#fff1f2]"
+                        : "rounded-tl-sm border-white/[0.07] bg-[#2a2a2c] text-[#e5e1e4]"
+                    }`}
+                  >
+                    {message.media ? (
+                      <MessageImage
+                        media={message.media}
+                        loadImageUrl={loadImageUrl}
+                        onOpen={setViewer}
+                      />
+                    ) : null}
+                    {message.text ? (
+                      <p
+                        className={`${message.media ? "mt-1.5 " : ""}min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${
+                          isEmojiOnlyMessage(message.text)
+                            ? "text-3xl leading-9"
+                            : "text-sm leading-6"
+                        }`}
+                      >
+                        {message.text}
+                      </p>
+                    ) : null}
+                  </div>
                 </li>
               );
             })}
@@ -514,35 +537,22 @@ export function ChatPanel({
         )}
       </div>
 
-      <form ref={formRef} className="mt-3 min-w-0 shrink-0 space-y-2" onSubmit={handleSubmit}>
-        <label htmlFor="chat-input" className="sr-only">
-          Message
-        </label>
-        <textarea
-          ref={inputRef}
-          id="chat-input"
-          value={draft}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            setError(null);
-          }}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          rows={2}
-          placeholder={connected ? "Write a message…" : "Reconnect to send messages"}
-          disabled={!connected || sending}
-          className="block w-full min-w-0 resize-none rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-rose-400/60 focus:outline-none focus:ring-2 focus:ring-rose-400/20 disabled:cursor-not-allowed disabled:opacity-60"
-        />
-
+      <form
+        ref={formRef}
+        className="min-w-0 shrink-0 space-y-2 rounded-b-xl border-t border-white/[0.06] bg-[#1c1b1d] p-3"
+        onSubmit={handleSubmit}
+      >
         {pendingImage ? (
-          <div className="flex min-w-0 items-center gap-3 rounded-xl border border-white/10 bg-slate-900/60 p-2">
+          <div className="flex min-w-0 items-center gap-3 rounded-lg border border-white/[0.08] bg-[#0e0e10] p-2">
             <img
               src={pendingImage.previewUrl}
               alt="Selected image preview"
-              className="h-14 w-14 shrink-0 rounded-lg object-cover"
+              className="h-12 w-12 shrink-0 rounded-md object-cover"
             />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs text-slate-300">{pendingImage.file.name}</p>
+              <p className="truncate font-mono text-[11px] text-[#e5e1e4]">
+                {pendingImage.file.name}
+              </p>
               {uploading ? (
                 <div className="mt-1 flex items-center gap-2">
                   <progress
@@ -551,21 +561,21 @@ export function ChatPanel({
                     max={100}
                     className="h-1 min-w-0 flex-1"
                   />
-                  <span className="shrink-0 text-[11px] text-slate-500">
+                  <span className="shrink-0 font-mono text-[11px] text-[#8d8487]">
                     {Math.round(uploadProgress * 100)}%
                   </span>
                 </div>
               ) : uploadedMedia ? (
-                <p className="mt-1 text-[11px] text-emerald-300">Ready to send</p>
+                <p className="mt-1 font-mono text-[11px] text-[#4edea3]">Ready to send</p>
               ) : (
-                <p className="mt-1 text-[11px] text-slate-500">Upload failed</p>
+                <p className="mt-1 font-mono text-[11px] text-[#8d8487]">Upload failed</p>
               )}
             </div>
             {!uploading && !uploadedMedia ? (
               <button
                 type="button"
                 onClick={retryUpload}
-                className="h-8 shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 text-[11px] font-medium text-slate-300 transition hover:bg-white/10"
+                className="h-8 shrink-0 rounded-md border border-white/[0.08] bg-[#201f22] px-2.5 text-[11px] font-medium text-[#e5e1e4] transition hover:bg-[#2a2a2c]"
               >
                 Retry
               </button>
@@ -573,76 +583,98 @@ export function ChatPanel({
             <button
               type="button"
               onClick={clearImage}
-              className="h-8 shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 text-[11px] font-medium text-slate-300 transition hover:bg-white/10"
+              className="h-8 shrink-0 rounded-md border border-white/[0.08] bg-[#201f22] px-2.5 text-[11px] font-medium text-[#b8afb2] transition hover:bg-[#2a2a2c]"
             >
               Remove
             </button>
           </div>
         ) : null}
 
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="relative shrink-0">
-              <button
-                ref={emojiButtonRef}
-                type="button"
-                onClick={toggleEmoji}
-                aria-label="Add emoji"
-                aria-expanded={emojiOpen}
-                aria-haspopup="dialog"
-                disabled={emojiDisabled}
-                className="h-9 shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Emoji
-              </button>
-              {emojiOpen ? (
-                <div
-                  ref={emojiPickerRef}
-                  className="absolute bottom-full left-0 z-20 mb-2"
-                >
-                  <EmojiPicker
-                    onSelect={handleEmojiSelect}
-                    onClose={closeEmoji}
-                    excludeRef={emojiButtonRef}
-                  />
-                </div>
-              ) : null}
-            </div>
-            {onUploadImage ? (
-              <>
-                <input
-                  ref={fileInputRef}
-                  id="chat-image-input"
-                  type="file"
-                  accept={ACCEPTED_IMAGE_TYPES}
-                  aria-label="Image file"
-                  className="sr-only"
-                  onChange={handleFileChange}
-                  disabled={attachDisabled}
-                />
+        <div className="rounded-xl border border-white/[0.08] bg-[#0e0e10] p-2.5 focus-within:border-[#ff516a]/60 focus-within:ring-2 focus-within:ring-[#ff516a]/20">
+          <label htmlFor="chat-input" className="sr-only">
+            Message
+          </label>
+          <textarea
+            ref={inputRef}
+            id="chat-input"
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setError(null);
+            }}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            rows={2}
+            placeholder={connected ? "Write a message…" : "Reconnect to send messages"}
+            disabled={!connected || sending}
+            className="block w-full min-w-0 resize-none bg-transparent px-1 py-0.5 text-sm text-[#e5e1e4] placeholder:text-[#6c666d] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          />
+
+          <div className="mt-2 flex min-w-0 items-center justify-between gap-2 border-t border-white/[0.06] pt-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <div className="relative shrink-0">
                 <button
+                  ref={emojiButtonRef}
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  aria-label="Attach image"
-                  title={`Attach an image (max ${MAX_IMAGE_MEGABYTES} MB) or paste one with Ctrl+V`}
-                  disabled={attachDisabled}
-                  className="h-9 shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={toggleEmoji}
+                  aria-label="Add emoji"
+                  aria-expanded={emojiOpen}
+                  aria-haspopup="dialog"
+                  disabled={emojiDisabled}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-[#201f22] text-[#b8afb2] transition hover:bg-[#2a2a2c] hover:text-[#e5e1e4] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Image
+                  <SmileIcon className="h-4 w-4" />
                 </button>
-              </>
-            ) : null}
-            <span className="min-w-0 truncate text-[11px] text-slate-500">
-              {graphemeCount}/{MAX_CHAT_MESSAGE_LENGTH} · Enter sends, Shift+Enter adds a line
-            </span>
+                {emojiOpen ? (
+                  <div
+                    ref={emojiPickerRef}
+                    className="absolute bottom-full left-0 z-20 mb-2"
+                  >
+                    <EmojiPicker
+                      onSelect={handleEmojiSelect}
+                      onClose={closeEmoji}
+                      excludeRef={emojiButtonRef}
+                    />
+                  </div>
+                ) : null}
+              </div>
+              {onUploadImage ? (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    id="chat-image-input"
+                    type="file"
+                    accept={ACCEPTED_IMAGE_TYPES}
+                    aria-label="Image file"
+                    className="sr-only"
+                    onChange={handleFileChange}
+                    disabled={attachDisabled}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Attach image"
+                    title={`Attach an image (max ${MAX_IMAGE_MEGABYTES} MB) or paste one with Ctrl+V`}
+                    disabled={attachDisabled}
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-[#201f22] text-[#b8afb2] transition hover:bg-[#2a2a2c] hover:text-[#e5e1e4] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                  </button>
+                </>
+              ) : null}
+              <span className="min-w-0 truncate pl-1 font-mono text-[10px] text-[#8d8487]">
+                {graphemeCount}/{MAX_CHAT_MESSAGE_LENGTH} · Enter sends, Shift+Enter adds a line
+              </span>
+            </div>
+            <button
+              type="submit"
+              disabled={sendDisabled}
+              className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#ff516a] px-3 text-xs font-semibold text-white transition hover:bg-[#ea6479] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <SendIcon className="h-3.5 w-3.5" />
+              <span>{sending ? "Sending…" : "Send"}</span>
+            </button>
           </div>
-          <button
-            type="submit"
-            disabled={sendDisabled}
-            className="h-9 shrink-0 rounded-lg bg-rose-500 px-4 text-xs font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {sending ? "Sending…" : "Send"}
-          </button>
         </div>
 
         {error ? (
@@ -658,13 +690,13 @@ export function ChatPanel({
           aria-modal="true"
           aria-label="Shared image"
           onClick={() => setViewer(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#0e0e10]/90 p-4 backdrop-blur-md"
         >
           <button
             type="button"
             aria-label="Close image"
             onClick={() => setViewer(null)}
-            className="absolute right-4 top-4 rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
+            className="absolute right-4 top-4 rounded-lg border border-white/[0.15] bg-[#201f22] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#2a2a2c]"
           >
             Close
           </button>
@@ -672,7 +704,7 @@ export function ChatPanel({
             src={viewer.url}
             alt={viewer.alt}
             onClick={(event) => event.stopPropagation()}
-            className="max-h-full max-w-full rounded-xl"
+            className="max-h-full max-w-full rounded-xl border border-white/[0.1]"
           />
         </div>
       ) : null}
@@ -718,14 +750,14 @@ function MessageImage({ media, loadImageUrl, onOpen }: MessageImageProps) {
   }, [media.id, loadImageUrl]);
 
   if (failed) {
-    return <p className="mt-1 text-xs text-slate-500">Image unavailable.</p>;
+    return <p className="text-xs text-slate-500">Image unavailable.</p>;
   }
 
   if (!url) {
     return (
       <div
         aria-hidden="true"
-        className="mt-1 max-h-64 w-full animate-pulse rounded-lg border border-white/5 bg-slate-900/60"
+        className="max-h-64 w-full animate-pulse rounded-lg border border-white/5 bg-slate-900/60"
         style={{ aspectRatio: `${media.width} / ${media.height}` }}
       />
     );
@@ -736,7 +768,7 @@ function MessageImage({ media, loadImageUrl, onOpen }: MessageImageProps) {
       type="button"
       onClick={() => onOpen({ url, alt: "Shared image" })}
       aria-label="Open image"
-      className="mt-1 block max-w-full cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-400/40"
+      className="block max-w-full cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-400/40"
     >
       <img
         src={url}

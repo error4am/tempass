@@ -54,6 +54,20 @@ describe("ChatPanel", () => {
     ).not.toBeNull();
   });
 
+  it("aligns self messages on the right and other participant messages on the left", () => {
+    render(
+      <ChatPanel messages={MESSAGES} selfId="participant-alex" connected onSend={vi.fn()} />,
+    );
+
+    const items = within(screen.getByRole("log")).getAllByRole("listitem");
+
+    expect(items).toHaveLength(2);
+    expect(items[0]?.getAttribute("data-sender")).toBe("self");
+    expect(items[0]?.className).toContain("items-end");
+    expect(items[1]?.getAttribute("data-sender")).toBe("other");
+    expect(items[1]?.className).toContain("items-start");
+  });
+
   it("renders message text as plain text instead of HTML", () => {
     const htmlMessage: ChatMessage = {
       id: "message-html",

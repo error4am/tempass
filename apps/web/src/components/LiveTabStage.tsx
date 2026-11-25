@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { TabShareController } from "../realtime/useTabShare";
+import { ScreenShareIcon } from "./Icons";
 
 interface LiveTabStageProps {
   share: TabShareController;
@@ -117,7 +118,7 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
   if (viewer) {
     return (
       <div className="mt-4">
-        <div className="relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black">
+        <div className="relative aspect-video max-h-[75dvh] w-full overflow-hidden rounded-xl border border-white/[0.08] bg-black shadow-2xl shadow-black/60">
           {share.stream ? (
             <>
               <video
@@ -128,7 +129,7 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
               />
 
               {!framesArrived ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 px-6 text-center text-xs text-slate-400">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0e0e10]/85 px-6 text-center text-xs text-[#b8afb2] backdrop-blur-sm">
                   <span>Connecting to {share.active?.presenterName}&apos;s tab…</span>
                   {slowConnect ? (
                     <span className="max-w-sm text-amber-200">
@@ -139,10 +140,10 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
                 </div>
               ) : null}
 
-              <span className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full border border-rose-400/40 bg-slate-950/80 px-3 py-1 text-xs font-medium text-rose-200">
+              <span className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full border border-[#ff516a]/40 bg-[#0e0e10]/85 px-3 py-1 font-mono text-[11px] font-medium text-[#ffb2b7] backdrop-blur-md">
                 <span
                   aria-hidden="true"
-                  className="h-1.5 w-1.5 rounded-full bg-rose-400"
+                  className="h-1.5 w-1.5 rounded-full bg-[#ff516a]"
                 />
                 Live · {share.active?.presenterName}
               </span>
@@ -165,29 +166,29 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
 
                     setNeedsGesture(false);
                   }}
-                  className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-sm font-semibold text-white"
+                  className="absolute inset-0 flex items-center justify-center bg-[#0e0e10]/80 text-sm font-semibold text-white backdrop-blur-sm"
                 >
                   Tap to watch {share.active?.presenterName}&apos;s tab
                 </button>
               ) : null}
             </>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-              <span className="rounded-full border border-rose-400/30 bg-rose-400/10 px-3 py-1 text-xs font-medium text-rose-200">
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#0e0e10] px-6 text-center">
+              <span className="rounded-full border border-[#ff516a]/30 bg-[#ff516a]/12 px-3 py-1 font-mono text-[11px] font-medium text-[#ffb2b7]">
                 Live tab
               </span>
-              <p className="max-w-sm text-sm text-slate-300">
+              <p className="max-w-sm text-sm text-[#e5e1e4]">
                 {share.active?.presenterName} is sharing{" "}
                 {SURFACE_LABELS[share.active?.surface ?? "unknown"]}.
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[#8d8487]">
                 Waiting for the picture to arrive…
               </p>
             </div>
           )}
         </div>
 
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-[#8d8487]">
           You are watching {share.active?.presenterName}&apos;s tab. Only they
           can change what it shows.
         </p>
@@ -207,7 +208,7 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
 
     return (
       <div className="mt-4">
-        <div className="relative aspect-video max-h-[46vh] w-full overflow-hidden rounded-xl border border-rose-400/30 bg-black">
+        <div className="relative aspect-video max-h-[75dvh] w-full overflow-hidden rounded-xl border border-[#ff516a]/35 bg-black shadow-2xl shadow-black/60">
           {share.previewStream ? (
             <video
               ref={previewRef}
@@ -217,27 +218,27 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
               muted
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-xs text-slate-400">
+            <div className="flex h-full items-center justify-center bg-[#0e0e10] text-xs text-[#b8afb2]">
               Starting the preview…
             </div>
           )}
 
-          <span className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full border border-rose-400/40 bg-slate-950/80 px-3 py-1 text-xs font-semibold text-rose-100">
+          <span className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full border border-[#ff516a]/40 bg-[#0e0e10]/85 px-3 py-1 font-mono text-[11px] font-semibold text-[#ffb2b7] backdrop-blur-md">
             <span
               aria-hidden="true"
-              className="h-1.5 w-1.5 rounded-full bg-rose-400"
+              className="h-1.5 w-1.5 rounded-full bg-[#ff516a]"
             />
             LIVE · you
           </span>
 
-          <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-2 bg-slate-950/85 px-3 py-2">
-            <p className="min-w-0 text-xs text-slate-300">{statusText}</p>
+          <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.08] bg-[#0e0e10]/90 px-3.5 py-2.5 backdrop-blur-md">
+            <p className="min-w-0 text-xs text-[#e5e1e4]">{statusText}</p>
             <div className="flex shrink-0 items-center gap-2">
               {share.status === "connecting" ? (
                 <button
                   type="button"
                   onClick={share.retry}
-                  className="h-8 rounded-lg border border-white/15 bg-white/10 px-3 text-xs font-semibold text-slate-100 transition hover:bg-white/20"
+                  className="h-8 rounded-lg border border-white/[0.1] bg-[#201f22] px-3 text-xs font-semibold text-[#e5e1e4] transition hover:bg-[#2a2a2c]"
                 >
                   Retry
                 </button>
@@ -245,7 +246,7 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
               <button
                 type="button"
                 onClick={share.stop}
-                className="h-8 rounded-lg bg-rose-500 px-3 text-xs font-semibold text-white transition hover:bg-rose-400"
+                className="h-8 rounded-lg bg-[#ff516a] px-3 text-xs font-semibold text-white transition hover:bg-[#ea6479]"
               >
                 Stop sharing
               </button>
@@ -253,7 +254,7 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
           </div>
         </div>
 
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-[#8d8487]">
           You are sharing {SURFACE_LABELS[share.surface]}. The preview is muted
           here; the other person hears the tab audio. Switching tabs does not
           change what they see.
@@ -262,7 +263,7 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
         {share.audioMissing ? (
           <p
             role="status"
-            className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100"
+            className="mt-3 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100"
           >
             No tab audio was captured. Stop and share again with{" "}
             <span className="text-amber-200">Share tab audio</span> ticked if
@@ -270,7 +271,7 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
           </p>
         ) : null}
 
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-[#8d8487]">
           Chrome&apos;s sharing bar also stops the stream. Closing or reloading
           this room ends it too.
         </p>
@@ -280,12 +281,16 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
 
   return (
     <div className="mt-4">
-      <div className="flex aspect-video max-h-[46vh] w-full flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-white/10 bg-slate-900/50 px-6 text-center">
+      <div className="flex aspect-video max-h-[75dvh] w-full flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-white/[0.1] bg-[#0e0e10] px-6 text-center">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-[#1c1b1d] text-[#ff516a]">
+          <ScreenShareIcon className="h-5 w-5" />
+        </span>
+
         <div>
-          <p className="text-sm font-medium text-slate-300">
+          <p className="font-display text-sm font-medium text-[#e5e1e4]">
             Show the other person a tab
           </p>
-          <p className="mt-1 max-w-md text-xs text-slate-500">
+          <p className="mt-1 max-w-md text-xs text-[#8d8487]">
             Pick one browser tab and they watch it live, including whatever you
             scroll to. They cannot click or control it.
           </p>
@@ -297,12 +302,12 @@ export function LiveTabStage({ share, connected }: LiveTabStageProps) {
             void share.start();
           }}
           disabled={!connected || share.status === "starting"}
-          className="h-10 rounded-lg bg-rose-500 px-5 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-10 rounded-lg bg-[#ff516a] px-5 text-sm font-semibold text-white shadow-[0_0_20px_-4px_rgba(255,81,106,0.4)] transition hover:bg-[#ea6479] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {share.status === "starting" ? "Waiting for the picker…" : "Share this tab"}
         </button>
 
-        <p className="text-[11px] text-slate-600">
+        <p className="font-mono text-[11px] text-[#6c666d]">
           Desktop Chrome or Edge only. Your screen is never shared unless you
           pick it.
         </p>

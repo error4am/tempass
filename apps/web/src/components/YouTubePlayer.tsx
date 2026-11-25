@@ -28,6 +28,7 @@ import {
   type YouTubeIframeApi,
   type YouTubePlayer as YouTubePlayerInstance,
 } from "../lib/youtubeIframe";
+import { PauseIcon, PlayIcon, VolumeOffIcon, VolumeOnIcon } from "./Icons";
 
 type ApiStatus = "loading" | "ready" | "error";
 
@@ -992,29 +993,29 @@ export function YouTubePlayer({
 
   return (
     <div className="mt-4">
-      <div className="relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black">
+      <div className="relative aspect-video max-h-[75dvh] w-full overflow-hidden rounded-xl border border-white/[0.08] bg-black shadow-2xl shadow-black/60">
         <div
           ref={mountRef}
           className="pointer-events-none absolute inset-0"
         />
 
         {apiStatus === "loading" ? (
-          <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
-            <p role="status" className="text-sm text-slate-300">
+          <div className="absolute inset-0 flex items-center justify-center bg-[#0e0e10]/70 px-6 text-center backdrop-blur-sm">
+            <p role="status" className="font-mono text-xs text-[#e5e1e4]">
               Loading the YouTube player…
             </p>
           </div>
         ) : null}
 
         {apiStatus === "error" ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0e0e10]/85 px-6 text-center backdrop-blur-sm">
             <p role="alert" className="text-sm text-rose-200">
               The YouTube player could not be loaded.
             </p>
             <button
               type="button"
               onClick={handleRetryPlayer}
-              className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/15"
+              className="rounded-lg border border-white/[0.1] bg-[#201f22] px-3.5 py-2 text-xs font-semibold text-[#e5e1e4] transition hover:bg-[#2a2a2c]"
             >
               Retry player
             </button>
@@ -1022,22 +1023,22 @@ export function YouTubePlayer({
         ) : null}
 
         {apiStatus === "ready" && !playerReady && !playerError ? (
-          <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
-            <p role="status" className="text-sm text-slate-300">
+          <div className="absolute inset-0 flex items-center justify-center bg-[#0e0e10]/70 px-6 text-center backdrop-blur-sm">
+            <p role="status" className="font-mono text-xs text-[#e5e1e4]">
               Preparing the video…
             </p>
           </div>
         ) : null}
 
         {playerError ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/80 px-6 text-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0e0e10]/85 px-6 text-center backdrop-blur-sm">
             <p role="alert" className="max-w-sm text-sm text-rose-200">
               {playerError}
             </p>
             <button
               type="button"
               onClick={handleRetryPlayer}
-              className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/15"
+              className="rounded-lg border border-white/[0.1] bg-[#201f22] px-3.5 py-2 text-xs font-semibold text-[#e5e1e4] transition hover:bg-[#2a2a2c]"
             >
               Retry player
             </button>
@@ -1045,14 +1046,14 @@ export function YouTubePlayer({
         ) : null}
 
         {autoplayBlocked && !playerError ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/75 px-6 text-center">
-            <p className="max-w-sm text-sm text-slate-200">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0e0e10]/80 px-6 text-center backdrop-blur-sm">
+            <p className="max-w-sm text-sm text-[#e5e1e4]">
               Your browser paused playback for this tab.
             </p>
             <button
               type="button"
               onClick={handleJoinPlayback}
-              className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-400"
+              className="rounded-lg bg-[#ff516a] px-4 py-2 text-sm font-semibold text-white shadow-[0_0_20px_-4px_rgba(255,81,106,0.45)] transition hover:bg-[#ea6479]"
             >
               Tap to join playback
             </button>
@@ -1066,7 +1067,7 @@ export function YouTubePlayer({
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center p-3">
             <span
               role="status"
-              className="rounded-full border border-white/10 bg-slate-950/80 px-3 py-1 text-xs text-slate-200"
+              className="rounded-full border border-white/[0.1] bg-[#0e0e10]/85 px-3 py-1 font-mono text-[11px] text-[#e5e1e4] backdrop-blur-md"
             >
               Buffering…
             </span>
@@ -1074,53 +1075,8 @@ export function YouTubePlayer({
         ) : null}
       </div>
 
-      <div className="mt-3 flex min-w-0 flex-col gap-3 rounded-xl border border-white/5 bg-slate-950/40 p-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handleTogglePlayback}
-            disabled={controlsDisabled}
-            className="h-9 w-16 shrink-0 rounded-lg bg-rose-500 px-2 text-xs font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {playLabel}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleToggleMute}
-            disabled={controlsDisabled}
-            aria-pressed={muted}
-            className="h-9 w-16 shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {muted ? "Unmute" : "Mute"}
-          </button>
-
-          <label htmlFor="playback-rate" className="sr-only">
-            Playback speed
-          </label>
-          <select
-            id="playback-rate"
-            value={rate}
-            onChange={handleRateChange}
-            disabled={controlsDisabled}
-            title="Playback speed (shared with everyone)"
-            className="h-9 shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {rateOptions.map((option) => (
-              <option
-                key={option}
-                value={option}
-                className="bg-slate-900 text-slate-100"
-              >
-                {option}×
-              </option>
-            ))}
-          </select>
-
-          <span className="shrink-0 font-mono text-xs tabular-nums text-slate-400">
-            {formatTime(displayPosition)} / {duration > 0 ? formatTime(duration) : "--:--"}
-          </span>
-
+      <div className="mt-3 flex min-w-0 flex-col gap-3 rounded-xl border border-white/[0.08] bg-[#131315] p-3.5">
+        <div className="flex items-center">
           <label htmlFor="playback-position" className="sr-only">
             Playback position
           </label>
@@ -1139,18 +1095,96 @@ export function YouTubePlayer({
             onBlur={(event) => commitSeek(Number(event.currentTarget.value))}
             disabled={controlsDisabled || duration <= 0}
             aria-valuetext={`${formatTime(displayPosition)} of ${duration > 0 ? formatTime(duration) : "unknown duration"}`}
-            className="min-w-[8rem] flex-1 accent-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-1.5 w-full cursor-pointer accent-[#ff516a] disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-          <span className="truncate">
-            {connected
-              ? "Playback changes are shared with everyone in the room."
-              : "Reconnect to control playback."}
-          </span>
-          <span className="font-mono text-slate-400">{videoId}</span>
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleTogglePlayback}
+              disabled={controlsDisabled}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#ff516a] px-3.5 text-xs font-semibold text-white shadow-[0_0_16px_-4px_rgba(255,81,106,0.45)] transition hover:bg-[#ea6479] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isPlaying ? (
+                <PauseIcon className="h-3.5 w-3.5" />
+              ) : (
+                <PlayIcon className="h-3.5 w-3.5" />
+              )}
+              <span>{playLabel}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleMute}
+              disabled={controlsDisabled}
+              aria-pressed={muted}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-[#201f22] px-3 text-xs font-semibold text-[#e5e1e4] transition hover:bg-[#2a2a2c] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {muted ? (
+                <VolumeOffIcon className="h-3.5 w-3.5 text-[#b8afb2]" />
+              ) : (
+                <VolumeOnIcon className="h-3.5 w-3.5 text-[#b8afb2]" />
+              )}
+              <span>{muted ? "Unmute" : "Mute"}</span>
+            </button>
+
+            <span className="shrink-0 font-mono text-xs tabular-nums">
+              <span className="font-medium text-[#ffb2b7]">
+                {formatTime(displayPosition)}
+              </span>
+              <span className="mx-1 text-[#6c666d]">/</span>
+              <span className="text-[#b8afb2]">
+                {duration > 0 ? formatTime(duration) : "--:--"}
+              </span>
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="hidden items-center gap-1.5 rounded-md border border-[#4edea3]/20 bg-[#4edea3]/10 px-2.5 py-1 font-mono text-[11px] text-[#4edea3] xl:inline-flex">
+              <span
+                aria-hidden="true"
+                className="h-1.5 w-1.5 rounded-full bg-[#4edea3]"
+              />
+              {connected
+                ? "Synced with room"
+                : "Reconnect to control playback."}
+            </span>
+
+            <label htmlFor="playback-rate" className="sr-only">
+              Playback speed
+            </label>
+            <select
+              id="playback-rate"
+              value={rate}
+              onChange={handleRateChange}
+              disabled={controlsDisabled}
+              title="Playback speed (shared with everyone)"
+              className="h-8 shrink-0 rounded-md border border-white/[0.08] bg-[#201f22] px-2 font-mono text-xs font-semibold text-[#e5e1e4] transition hover:bg-[#2a2a2c] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {rateOptions.map((option) => (
+                <option
+                  key={option}
+                  value={option}
+                  className="bg-[#18181b] text-[#e5e1e4]"
+                >
+                  {option}×
+                </option>
+              ))}
+            </select>
+
+            <span className="rounded-md border border-white/[0.06] bg-[#0e0e10] px-2 py-1 font-mono text-[11px] text-[#8d8487]">
+              {videoId}
+            </span>
+          </div>
         </div>
+
+        <p className="text-[11px] text-[#8d8487] xl:hidden">
+          {connected
+            ? "Playback changes are shared with everyone in the room."
+            : "Reconnect to control playback."}
+        </p>
       </div>
 
       {commandError ? (

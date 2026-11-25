@@ -55,7 +55,7 @@ function useBookmarkletAnchor(bookmarklet: string, label: string) {
     anchor.textContent = label;
     anchor.draggable = true;
     anchor.className =
-      "inline-flex h-9 cursor-grab items-center rounded-lg bg-rose-500 px-4 text-xs font-semibold text-white transition hover:bg-rose-400";
+      "inline-flex h-9 cursor-grab items-center rounded-lg bg-[#ff516a] px-4 text-xs font-semibold text-white transition hover:bg-[#ea6479]";
     anchor.addEventListener("click", (event) => {
       event.preventDefault();
       void navigator.clipboard?.writeText(bookmarklet).catch(() => {});
@@ -92,21 +92,21 @@ export function CompanionCard({ roomId, token }: CompanionCardProps) {
   }
 
   return (
-    <details className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-      <summary className="cursor-pointer text-sm font-semibold text-slate-200">
+    <details className="mt-4 rounded-xl border border-white/[0.08] bg-[#131315] p-4 sm:p-5">
+      <summary className="cursor-pointer font-display text-sm font-semibold text-[#e5e1e4]">
         Watch a site that blocks embedding
       </summary>
 
-      <p className="mt-3 text-sm text-slate-400">
+      <p className="mt-3 text-sm text-[#b8afb2]">
         Sites like aryplus.tv refuse to be framed, so the picture cannot be
         embedded. Instead, the video plays in the presenter&apos;s own tab and
         that tab is captured into this room: play, pause and seek from here, and
         everyone sees the same screen.
       </p>
 
-      <ol className="mt-4 list-decimal space-y-1 pl-5 text-sm text-slate-400">
+      <ol className="mt-4 list-decimal space-y-1.5 pl-5 text-sm text-[#b8afb2]">
         <li>
-          <strong className="text-slate-300">Once:</strong> drag the pink button
+          <strong className="text-[#e5e1e4]">Once:</strong> drag the pink button
           to your bookmarks bar. It never needs replacing — it asks for the room
           link each time.
         </li>
@@ -117,7 +117,7 @@ export function CompanionCard({ roomId, token }: CompanionCardProps) {
           Copy the room link below, then click the bookmark and paste it.
         </li>
         <li>
-          The badge appears; press <span className="text-slate-300">Share this
+          The badge appears; press <span className="text-[#e5e1e4]">Share this
           tab</span> in it and pick the video tab.
         </li>
       </ol>
@@ -127,17 +127,17 @@ export function CompanionCard({ roomId, token }: CompanionCardProps) {
         <button
           type="button"
           onClick={() => copy(roomLink, "link")}
-          className="h-9 rounded-lg border border-white/10 bg-white/5 px-4 text-xs font-semibold text-slate-300 transition hover:bg-white/10"
+          className="h-9 rounded-lg border border-white/[0.08] bg-[#201f22] px-4 text-xs font-semibold text-[#e5e1e4] transition hover:bg-[#2a2a2c]"
         >
           {copied === "link" ? "Copied" : "Copy room link"}
         </button>
       </div>
 
       <details className="mt-4">
-        <summary className="cursor-pointer text-xs text-slate-500">
+        <summary className="cursor-pointer text-xs text-[#8d8487]">
           Prefer a one-click bookmark that doesn&apos;t prompt?
         </summary>
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-[#8d8487]">
           This variant carries this room&apos;s link inside it. Re-drag it for
           every new room.
         </p>
@@ -146,12 +146,12 @@ export function CompanionCard({ roomId, token }: CompanionCardProps) {
           <button
             type="button"
             onClick={() => copy(roomBookmarklet, "bookmarklet")}
-            className="h-9 rounded-lg border border-white/10 bg-white/5 px-4 text-xs font-semibold text-slate-300 transition hover:bg-white/10"
+            className="h-9 rounded-lg border border-white/[0.08] bg-[#201f22] px-4 text-xs font-semibold text-[#e5e1e4] transition hover:bg-[#2a2a2c]"
           >
             {copied === "bookmarklet" ? "Copied" : "Copy code"}
           </button>
         </div>
-        <pre className="mt-2 overflow-x-auto rounded-lg border border-white/5 bg-slate-950/60 p-3 text-[11px] leading-relaxed text-slate-400">
+        <pre className="mt-2 overflow-x-auto rounded-lg border border-white/[0.06] bg-[#0e0e10] p-3 font-mono text-[11px] leading-relaxed text-[#b8afb2]">
           {roomBookmarklet}
         </pre>
       </details>

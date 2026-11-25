@@ -139,7 +139,7 @@ export function EmojiPicker({ onSelect, onClose, excludeRef }: EmojiPickerProps)
       role="dialog"
       aria-label="Emoji picker"
       onKeyDown={handleKeyDown}
-      className="w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl shadow-black/40"
+      className="w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-white/[0.1] bg-[#18181b] p-2.5 shadow-2xl shadow-black/70"
     >
       <input
         ref={searchRef}
@@ -151,16 +151,16 @@ export function EmojiPicker({ onSelect, onClose, excludeRef }: EmojiPickerProps)
         }}
         placeholder="Search emoji"
         aria-label="Search emoji"
-        className="block w-full min-w-0 rounded-lg border border-white/10 bg-slate-950/60 px-2 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-rose-400/60 focus:outline-none focus:ring-2 focus:ring-rose-400/20"
+        className="block w-full min-w-0 rounded-lg border border-white/[0.08] bg-[#0e0e10] px-2.5 py-1.5 text-xs text-[#e5e1e4] placeholder:text-[#6c666d] focus:border-[#ff516a]/60 focus:outline-none focus:ring-2 focus:ring-[#ff516a]/20"
       />
 
-      <div ref={listRef} className="mt-1 max-h-64 overflow-y-auto pr-1">
+      <div ref={listRef} className="chat-scroll mt-1.5 max-h-64 overflow-y-auto pr-1">
         {results.length === 0 ? (
-          <p className="px-1 py-6 text-center text-xs text-slate-500">No emoji found.</p>
+          <p className="px-1 py-6 text-center text-xs text-[#8d8487]">No emoji found.</p>
         ) : (
           groups.map((group) => (
             <div key={group.id} role="group" aria-label={group.label}>
-              <p className="px-1 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              <p className="px-1 pb-1 pt-2 font-mono text-[10px] font-medium uppercase tracking-wider text-[#8d8487]">
                 {group.label}
               </p>
               <div className="grid grid-cols-8 gap-1">
@@ -176,8 +176,8 @@ export function EmojiPicker({ onSelect, onClose, excludeRef }: EmojiPickerProps)
                       onMouseEnter={() => setActiveIndex(index)}
                       aria-label={emoji.name}
                       title={emoji.name}
-                      className={`flex h-8 items-center justify-center rounded-md text-lg leading-none transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/40 ${
-                        index === activeIndex ? "bg-white/15" : ""
+                      className={`flex h-8 items-center justify-center rounded-md text-lg leading-none transition hover:bg-[#2a2a2c] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff516a]/40 ${
+                        index === activeIndex ? "bg-[#2a2a2c]" : ""
                       }`}
                     >
                       <span aria-hidden="true">{emoji.char}</span>

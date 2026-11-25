@@ -8,6 +8,7 @@ import {
   type PublicRoom,
 } from "@tempass/shared";
 
+import { ArrowRightIcon, LockIcon } from "../components/Icons";
 import { Shell } from "../components/Shell";
 import { ApiError, getRoom, joinRoom } from "../lib/api";
 import { roomErrorMessage } from "../lib/roomErrors";
@@ -15,7 +16,7 @@ import { navigate } from "../lib/router";
 import { loadDisplayName, saveDisplayName, saveSession } from "../lib/session";
 
 const inputStyles =
-  "mt-1 h-11 w-full rounded-xl border border-white/10 bg-slate-900/70 px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-rose-400/60 focus:outline-none focus:ring-2 focus:ring-rose-400/20";
+  "mt-1.5 h-11 w-full rounded-lg border border-white/[0.08] bg-[#0e0e10] px-3.5 text-sm text-[#e5e1e4] placeholder:text-[#6c666d] transition focus:border-[#ff516a]/70 focus:outline-none focus:ring-2 focus:ring-[#ff516a]/20 disabled:cursor-not-allowed disabled:opacity-60";
 
 interface JoinProps {
   roomId: string;
@@ -103,8 +104,12 @@ export function Join({ roomId }: JoinProps) {
   if (loadingRoom) {
     return (
       <Shell>
-        <div className="flex max-w-xl flex-1 flex-col justify-center">
-          <p className="text-sm text-slate-400">Loading room…</p>
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
+          <div className="rounded-xl border border-white/[0.08] bg-[#1c1b1d] p-7 text-center shadow-2xl shadow-black/40">
+            <p className="font-mono text-xs uppercase tracking-wider text-[#b8afb2]">
+              Loading room…
+            </p>
+          </div>
         </div>
       </Shell>
     );
@@ -113,15 +118,20 @@ export function Join({ roomId }: JoinProps) {
   if (!room || loadError) {
     return (
       <Shell>
-        <div className="max-w-xl">
-          <h1 className="text-2xl font-semibold tracking-tight">Room unavailable</h1>
+        <div className="mx-auto w-full max-w-md rounded-xl border border-white/[0.08] bg-[#1c1b1d] p-7 shadow-2xl shadow-black/40">
+          <p className="font-mono text-[11px] uppercase tracking-wider text-[#ffb2b7]">
+            Invite unavailable
+          </p>
+          <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-[#e5e1e4]">
+            Room unavailable
+          </h1>
           <p role="alert" className="mt-3 text-sm text-rose-300">
             {loadError ?? roomErrorMessage("ROOM_NOT_FOUND")}
           </p>
           <button
             type="button"
             onClick={() => navigate("/")}
-            className="mt-6 h-11 rounded-xl bg-rose-500 px-5 text-sm font-semibold text-white hover:bg-rose-400"
+            className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-lg bg-[#ff516a] px-5 text-sm font-semibold text-white transition hover:bg-[#ea6479]"
           >
             Back to home
           </button>
@@ -134,23 +144,45 @@ export function Join({ roomId }: JoinProps) {
 
   return (
     <Shell>
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.03] p-6 shadow-2xl shadow-black/20">
-        <p className="text-xs font-medium uppercase tracking-wide text-rose-300">Join a room</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">You are invited</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Room <span className="font-mono text-slate-200">{room.id}</span> ·{" "}
-          {room.participantCount}/{room.capacity} participants
+      <div className="mx-auto w-full max-w-md rounded-xl border border-white/[0.08] bg-[#1c1b1d] p-7 shadow-2xl shadow-black/40">
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-mono text-[11px] uppercase tracking-wider text-[#ffb2b7]">
+            Join a room
+          </p>
+          <span className="rounded-md border border-white/[0.08] bg-[#0e0e10] px-2 py-0.5 font-mono text-[11px] text-[#b8afb2]">
+            {room.participantCount}/{room.capacity} participants
+          </span>
+        </div>
+
+        <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-[#e5e1e4]">
+          You are invited
+        </h1>
+
+        <p className="mt-2 flex items-center gap-2 text-xs text-[#8d8487]">
+          <span>Room</span>
+          <code className="truncate rounded border border-white/[0.06] bg-[#0e0e10] px-2 py-0.5 font-mono text-[#e5e1e4]">
+            {room.id}
+          </code>
+          {room.requiresPassword ? (
+            <span className="inline-flex items-center gap-1 font-mono text-[11px] text-[#ffb2b7]">
+              <LockIcon className="h-3 w-3" />
+              Protected
+            </span>
+          ) : null}
         </p>
 
         {isFull ? (
-          <p role="alert" className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
+          <p
+            role="alert"
+            className="mt-5 rounded-lg border border-amber-400/25 bg-amber-400/10 p-3 text-sm text-amber-200"
+          >
             This room is full right now. Try again if someone leaves.
           </p>
         ) : null}
 
-        <form className="mt-5 space-y-3" onSubmit={handleJoin}>
+        <form className="mt-5 space-y-4" onSubmit={handleJoin}>
           <div>
-            <label htmlFor="join-name" className="text-xs font-medium text-slate-300">
+            <label htmlFor="join-name" className="block text-xs font-medium text-[#b8afb2]">
               Your display name
             </label>
             <input
@@ -168,7 +200,7 @@ export function Join({ roomId }: JoinProps) {
 
           {room.requiresPassword ? (
             <div>
-              <label htmlFor="join-password" className="text-xs font-medium text-slate-300">
+              <label htmlFor="join-password" className="block text-xs font-medium text-[#b8afb2]">
                 Room password
               </label>
               <input
@@ -194,17 +226,18 @@ export function Join({ roomId }: JoinProps) {
 
           <button
             type="submit"
-            className="h-11 w-full rounded-xl bg-rose-500 px-5 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#ff516a] px-5 text-sm font-semibold text-white shadow-[0_0_24px_-4px_rgba(255,81,106,0.45)] transition hover:bg-[#ea6479] disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isFull || joining}
           >
-            {joining ? "Joining…" : "Join room"}
+            <span>{joining ? "Joining…" : "Join room"}</span>
+            <ArrowRightIcon className="h-4 w-4" />
           </button>
         </form>
 
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="mt-4 text-sm text-slate-400 transition hover:text-slate-200"
+          className="mt-5 text-xs font-medium text-[#8d8487] transition hover:text-[#e5e1e4]"
         >
           Back to home
         </button>

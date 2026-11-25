@@ -13,6 +13,14 @@ import {
 
 import { ChatPanel } from "../components/ChatPanel";
 import { CompanionCard } from "../components/CompanionCard";
+import {
+  CheckIcon,
+  CopyIcon,
+  KeyIcon,
+  LinkIcon,
+  PowerIcon,
+  UsersIcon,
+} from "../components/Icons";
 import { Shell } from "../components/Shell";
 import { WatchStage } from "../components/WatchStage";
 import { createChatMediaLoader, uploadChatImage } from "../lib/media";
@@ -42,10 +50,10 @@ const STATUS_LABELS: Record<ConnectionStatus, string> = {
 };
 
 const STATUS_STYLES: Record<ConnectionStatus, string> = {
-  connecting: "border-slate-400/20 bg-slate-400/10 text-slate-300",
-  connected: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
-  reconnecting: "border-amber-400/20 bg-amber-400/10 text-amber-200",
-  error: "border-rose-400/20 bg-rose-400/10 text-rose-300",
+  connecting: "border-white/[0.08] bg-[#1c1b1d] text-[#b8afb2]",
+  connected: "border-[#4edea3]/30 bg-[#4edea3]/10 text-[#4edea3]",
+  reconnecting: "border-amber-400/30 bg-amber-400/10 text-amber-200",
+  error: "border-rose-400/30 bg-rose-500/10 text-rose-300",
 };
 
 export function Room({ roomId, session }: RoomProps) {
@@ -233,50 +241,70 @@ export function Room({ roomId, session }: RoomProps) {
   const capacity = snapshot?.room.capacity ?? null;
   const statusLabel = STATUS_LABELS[status];
 
+  const headerContent = (
+    <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2.5 sm:justify-end">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="inline-flex max-w-[14rem] items-center gap-1.5 rounded-md border border-white/[0.08] bg-[#1c1b1d] px-2.5 py-1 font-mono text-[11px] text-[#b8afb2]">
+          <span className="shrink-0 text-[#8d8487]">ROOM //</span>
+          <code className="truncate text-[#e5e1e4]">{roomId}</code>
+        </span>
+
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-[#1c1b1d] px-2.5 py-1 font-mono text-[11px] text-[#e5e1e4]">
+          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#4edea3]" />
+          {participants.length}/{capacity ?? "—"} watching
+        </span>
+
+        <span
+          aria-live="polite"
+          className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-[11px] font-medium ${STATUS_STYLES[status]}`}
+        >
+          <span
+            aria-hidden="true"
+            className={`h-1.5 w-1.5 rounded-full ${
+              status === "connected"
+                ? "bg-[#4edea3]"
+                : status === "error"
+                  ? "bg-rose-400"
+                  : "bg-amber-300"
+            }`}
+          />
+          {statusLabel}
+        </span>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/[0.08] bg-[#201f22] px-3 font-mono text-[11px] font-medium text-[#e5e1e4] transition hover:bg-[#2a2a2c]"
+        >
+          {copied ? (
+            <CheckIcon className="h-3.5 w-3.5 text-[#4edea3]" />
+          ) : (
+            <LinkIcon className="h-3.5 w-3.5 text-[#b8afb2]" />
+          )}
+          <span>{copied ? "Copied" : "Copy invite"}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleLeave}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/[0.08] bg-transparent px-3 font-mono text-[11px] font-medium text-[#b8afb2] transition hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-200"
+        >
+          <PowerIcon className="h-3.5 w-3.5" />
+          <span>Leave room</span>
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <Shell wide>
+    <Shell wide headerContent={headerContent}>
       <div className="flex flex-1 flex-col gap-4">
-        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Room</span>
-            <code className="min-w-0 truncate font-mono text-sm text-slate-200">{roomId}</code>
-            <span className="text-xs text-slate-500">
-              {participants.length}/{capacity ?? "—"} watching
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              aria-live="polite"
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${STATUS_STYLES[status]}`}
-            >
-              <span
-                aria-hidden="true"
-                className={`h-1.5 w-1.5 rounded-full ${
-                  status === "connected"
-                    ? "bg-emerald-400"
-                    : status === "error"
-                      ? "bg-rose-400"
-                      : "bg-amber-300"
-                }`}
-              />
-              {statusLabel}
-            </span>
-
-            <button
-              type="button"
-              onClick={handleLeave}
-              className="h-8 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-slate-300 transition hover:bg-white/10"
-            >
-              Leave room
-            </button>
-          </div>
-        </section>
-
         {status === "reconnecting" ? (
           <p
             role="status"
-            className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"
+            className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"
           >
             Connection lost. Tempass is trying to reconnect you to the room.
           </p>
@@ -285,21 +313,21 @@ export function Room({ roomId, session }: RoomProps) {
         {status === "error" ? (
           <section
             role="alert"
-            className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100"
+            className="rounded-xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100"
           >
             <p>{errorMessage ?? "Something went wrong."}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => navigate(`/join/${roomId}`)}
-                className="rounded-lg bg-rose-500 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-400"
+                className="rounded-lg bg-[#ff516a] px-3 py-2 text-xs font-semibold text-white hover:bg-[#ea6479]"
               >
                 Join again
               </button>
               <button
                 type="button"
                 onClick={() => navigate("/")}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10"
+                className="rounded-lg border border-white/[0.08] bg-[#201f22] px-3 py-2 text-xs font-semibold text-[#e5e1e4] hover:bg-[#2a2a2c]"
               >
                 Back home
               </button>
@@ -307,7 +335,7 @@ export function Room({ roomId, session }: RoomProps) {
           </section>
         ) : null}
 
-        <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)]">
+        <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(340px,24rem)] xl:grid-cols-[minmax(0,1fr)_minmax(360px,26rem)]">
           <WatchStage
             playback={playback}
             bridge={bridge}
@@ -320,64 +348,84 @@ export function Room({ roomId, session }: RoomProps) {
             onCommand={handlePlaybackCommand}
           />
 
-          <ChatPanel
-            messages={messages}
-            selfId={session.participantId}
-            connected={status === "connected"}
-            onSend={sendChatMessage}
-            onUploadImage={handleUploadImage}
-            loadImageUrl={mediaLoader.load}
-          />
+          <div className="min-w-0 lg:relative lg:min-h-[36rem]">
+            <div className="lg:absolute lg:inset-0">
+              <ChatPanel
+                messages={messages}
+                selfId={session.participantId}
+                connected={status === "connected"}
+                onSend={sendChatMessage}
+                onUploadImage={handleUploadImage}
+                loadImageUrl={mediaLoader.load}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <section
             aria-labelledby="participants-heading"
-            className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+            className="min-w-0 rounded-xl border border-white/[0.08] bg-[#1c1b1d] p-5"
           >
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 id="participants-heading" className="text-sm font-semibold text-slate-200">
-                Participants
-              </h2>
-              <span className="text-xs text-slate-500">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <UsersIcon className="h-4 w-4 text-[#4edea3]" />
+                <h2
+                  id="participants-heading"
+                  className="font-display text-sm font-semibold text-[#e5e1e4]"
+                >
+                  Participants
+                </h2>
+              </div>
+              <span className="rounded-full border border-[#4edea3]/25 bg-[#4edea3]/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-[#4edea3]">
                 {participants.length}/{capacity ?? "-"}
               </span>
             </div>
 
-            <ul className="mt-3 space-y-2">
+            <ul className="mt-3.5 space-y-2">
               {participants.map((participant) => {
                 const isSelf = participant.id === session.participantId;
 
                 return (
                   <li
                     key={participant.id}
-                    className="flex items-center gap-3 rounded-xl border border-white/5 bg-slate-900/40 px-3 py-2"
+                    className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-[#0e0e10] px-3.5 py-2.5"
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-500/20 text-xs font-semibold uppercase text-rose-200">
-                      {participant.displayName.slice(0, 1)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm text-slate-200">
-                        {participant.displayName}
-                        {isSelf ? <span className="ml-1 text-xs text-slate-500">(you)</span> : null}
+                    <div className="relative shrink-0">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full border border-[#ff516a]/30 bg-[#ff516a]/18 text-xs font-semibold uppercase text-[#ffb2b7]">
+                        {participant.displayName.slice(0, 1)}
                       </span>
-                      <span className="block text-xs text-slate-500">
+                      <span
+                        aria-hidden="true"
+                        className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#0e0e10] ${
+                          participant.connected ? "bg-[#4edea3]" : "bg-amber-300"
+                        }`}
+                      />
+                    </div>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-[#e5e1e4]">
+                        {participant.displayName}
+                        {isSelf ? (
+                          <span className="ml-1.5 font-mono text-[11px] font-normal text-[#ffb2b7]">
+                            (you)
+                          </span>
+                        ) : null}
+                      </span>
+                      <span
+                        className={`block font-mono text-[11px] ${
+                          participant.connected ? "text-[#4edea3]" : "text-amber-300"
+                        }`}
+                      >
                         {participant.connected ? "Connected" : "Reconnecting…"}
                       </span>
                     </span>
-                    <span
-                      aria-hidden="true"
-                      className={`h-2 w-2 rounded-full ${
-                        participant.connected ? "bg-emerald-400" : "bg-amber-300"
-                      }`}
-                    />
                   </li>
                 );
               })}
             </ul>
 
             {participants.length === 1 ? (
-              <p className="mt-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-xs text-slate-500">
+              <p className="mt-3 rounded-lg border border-white/[0.06] bg-[#0e0e10]/70 px-3 py-2 text-xs text-[#8d8487]">
                 Waiting for the second person to join…
               </p>
             ) : null}
@@ -385,36 +433,57 @@ export function Room({ roomId, session }: RoomProps) {
 
           <section
             aria-labelledby="invite-heading"
-            className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+            className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-white/[0.08] bg-[#1c1b1d] p-5"
           >
-            <h2 id="invite-heading" className="text-sm font-semibold text-slate-200">
-              Invitation link
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Share it with the other participant.
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <KeyIcon className="h-4 w-4 text-[#ff516a]" />
+                <h2
+                  id="invite-heading"
+                  className="font-display text-sm font-semibold text-[#e5e1e4]"
+                >
+                  Invitation link
+                </h2>
+              </div>
+              <span className="font-mono text-[11px] text-[#8d8487]">
+                #{roomId.slice(0, 8)}
+              </span>
+            </div>
+
+            <p className="text-xs text-[#b8afb2]">
+              Share this private link with the other participant.
             </p>
 
-            <label htmlFor="invite-link" className="sr-only">
-              Invitation link
-            </label>
-            <input
-              id="invite-link"
-              readOnly
-              value={inviteUrl}
-              onFocus={(event) => event.currentTarget.select()}
-              className="mt-3 h-10 w-full min-w-0 rounded-lg border border-white/10 bg-slate-900/70 px-3 font-mono text-xs text-slate-300"
-            />
+            <div>
+              <label htmlFor="invite-link" className="sr-only">
+                Invitation link
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  id="invite-link"
+                  readOnly
+                  value={inviteUrl}
+                  onFocus={(event) => event.currentTarget.select()}
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-[#0e0e10] px-3 font-mono text-xs text-[#e5e1e4] focus:border-[#ff516a]/60 focus:outline-none"
+                />
 
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="mt-3 h-9 w-full rounded-lg bg-rose-500 px-3 text-xs font-semibold text-white transition hover:bg-rose-400"
-            >
-              {copied ? "Copied" : "Copy invitation link"}
-            </button>
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-[#201f22] px-4 text-xs font-semibold text-[#e5e1e4] transition hover:bg-[#2a2a2c]"
+                >
+                  {copied ? (
+                    <CheckIcon className="h-3.5 w-3.5 text-[#4edea3]" />
+                  ) : (
+                    <CopyIcon className="h-3.5 w-3.5 text-[#b8afb2]" />
+                  )}
+                  <span>{copied ? "Copied" : "Copy invitation link"}</span>
+                </button>
+              </div>
+            </div>
 
             {copyError ? (
-              <p role="alert" className="mt-2 text-xs text-rose-300">
+              <p role="alert" className="text-xs text-rose-300">
                 {copyError}
               </p>
             ) : null}

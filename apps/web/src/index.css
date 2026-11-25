@@ -1,25 +1,53 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 :root {
   color-scheme: dark;
-  font-family:
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  font-family: var(--font-sans);
 }
 
 body {
   margin: 0;
   min-width: 320px;
-  background-color: #020617;
-  color: #f1f5f9;
+  background-color: #131315;
+  color: #e5e1e4;
   -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
-  background-color: #f43f5e;
+  background-color: #ff516a;
   color: #fff;
+}
+
+.chat-scroll {
+  scrollbar-gutter: stable;
+  --scrollbar-thumb: #6c666d;
+  --scrollbar-track: transparent;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+@supports not (scrollbar-color: auto) {
+  .chat-scroll {
+    scrollbar-width: auto;
+  }
+
+  .chat-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .chat-scroll::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 9999px;
+  }
+
+  .chat-scroll::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
 }
